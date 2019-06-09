@@ -39,6 +39,8 @@ public class VersioningMojo extends AbstractMojo {
     static final String GIT_VERSIONING_POM_NAME = ".git-versioned-pom.xml";
     static final String propertyKeyPrefix = VersioningMojo.class.getName() + ".";
     static final String propertyKeyUpdatePom = "updatePom";
+    static final String propertyKeyForceUpdateParent = "forceUpdateParent";
+
 
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     private MavenProject project;
@@ -49,6 +51,10 @@ public class VersioningMojo extends AbstractMojo {
             // read plugin properties
             final boolean configUpdatePom = Boolean.valueOf(
                     project.getProperties().getProperty(propertyKeyPrefix + propertyKeyUpdatePom));
+
+            // read plugin properties
+            final boolean forceUpdateParent = Boolean.valueOf(
+                    project.getProperties().getProperty(propertyKeyPrefix + propertyKeyForceUpdateParent));
 
             // remove plugin and properties
             getLog().debug(project.getModel().getArtifactId() + "remove this plugin and plugin properties from model");
@@ -70,8 +76,8 @@ public class VersioningMojo extends AbstractMojo {
                 versionElement.setText(project.getVersion());
             }
             Element parentVersionElement = gitVersionedPomDocument.getChild("/project/parent/version");
-            if (parentVersionElement != null && isProjectPom(project.getParent().getFile())) {
-                parentVersionElement.setText(project.getParent().getVersion());
+            if (parentVersionElement != null /*&& isProjectPom(project.getParent().getFile()*/) {
+                parentVersionElement.setText(project.getVersion());
             }
 
             File gitVersionedPomFile = new File(project.getBuild().getDirectory(), GIT_VERSIONING_POM_NAME);

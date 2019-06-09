@@ -107,6 +107,11 @@ public class ModelProcessor extends DefaultModelProcessor {
     }
 
     private Model processModel(Model projectModel) {
+        boolean skip = Boolean.valueOf(Optional.ofNullable(System.getProperties().get(propertyKeyPrefix + ".skip")).map(String::valueOf).orElse("false"));
+        if(skip){
+            logger.debug("skip - skip property set- " + projectModel.getPomFile());
+            return projectModel;
+        }
         if (!isProjectPom(projectModel.getPomFile())) {
             logger.debug("skip - unrelated pom location - " + projectModel.getPomFile());
             return projectModel;
