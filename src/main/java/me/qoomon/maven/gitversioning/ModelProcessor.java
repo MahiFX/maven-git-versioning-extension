@@ -28,7 +28,6 @@ import static java.util.Collections.singletonList;
 import static java.util.Optional.ofNullable;
 import static java.util.stream.Collectors.toList;
 import static me.qoomon.UncheckedExceptions.unchecked;
-import static me.qoomon.maven.gitversioning.MavenUtil.isProjectPom;
 import static me.qoomon.maven.gitversioning.MavenUtil.readModel;
 import static me.qoomon.maven.gitversioning.VersioningMojo.*;
 
@@ -110,10 +109,6 @@ public class ModelProcessor extends DefaultModelProcessor {
         boolean skip = Boolean.valueOf(Optional.ofNullable(System.getProperties().get(propertyKeyPrefix + "skip")).map(String::valueOf).orElse("false"));
         if (skip) {
             logger.debug("skip - skip property set- " + projectModel.getPomFile());
-            return projectModel;
-        }
-        if (!isProjectPom(projectModel.getPomFile())) {
-            logger.debug("skip - unrelated pom location - " + projectModel.getPomFile());
             return projectModel;
         }
 
@@ -259,7 +254,7 @@ public class ModelProcessor extends DefaultModelProcessor {
         {
             // search in parent project directories
             Model parentModel = getParentModel(projectModel);
-            while (parentModel != null && isProjectPom(parentModel.getPomFile())) {
+            while (parentModel != null) {
                 final File mvnDir = new File(parentModel.getProjectDirectory(), ".mvn");
                 if (mvnDir.exists()) {
                     logger.debug("Found .mvn directory in parent project hierarchy - " + mvnDir.toString());
