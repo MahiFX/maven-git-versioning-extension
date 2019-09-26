@@ -1,5 +1,9 @@
 package me.qoomon.maven.gitversioning;
 
+import de.pdark.decentxml.Document;
+import de.pdark.decentxml.Element;
+import de.pdark.decentxml.XMLParser;
+import de.pdark.decentxml.XMLStringSource;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.Plugin;
 import org.apache.maven.plugin.AbstractMojo;
@@ -14,13 +18,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.HashSet;
-
-import static me.qoomon.maven.gitversioning.MavenUtil.*;
-
-import de.pdark.decentxml.Document;
-import de.pdark.decentxml.Element;
-import de.pdark.decentxml.XMLParser;
-import de.pdark.decentxml.XMLStringSource;
 
 /**
  * Temporarily replace original pom files with pom files generated from in memory project models.
@@ -39,7 +36,6 @@ public class VersioningMojo extends AbstractMojo {
     static final String GIT_VERSIONING_POM_NAME = ".git-versioned-pom.xml";
     static final String propertyKeyPrefix = VersioningMojo.class.getName() + ".";
     static final String propertyKeyUpdatePom = "updatePom";
-    static final String propertyKeyForceUpdateParent = "forceUpdateParent";
 
 
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
@@ -51,10 +47,6 @@ public class VersioningMojo extends AbstractMojo {
             // read plugin properties
             final boolean configUpdatePom = Boolean.valueOf(
                     project.getProperties().getProperty(propertyKeyPrefix + propertyKeyUpdatePom));
-
-            // read plugin properties
-            final boolean forceUpdateParent = Boolean.valueOf(
-                    project.getProperties().getProperty(propertyKeyPrefix + propertyKeyForceUpdateParent));
 
             // remove plugin and properties
             getLog().debug(project.getModel().getArtifactId() + "remove this plugin and plugin properties from model");
