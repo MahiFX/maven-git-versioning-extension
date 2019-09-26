@@ -115,7 +115,8 @@ public class ModelProcessor extends DefaultModelProcessor {
         }
 
         // TODO add prop to limit to list of groupIds
-        if (projectModel.getGroupId().equals("org.apache.maven")) {
+        if (projectModel.getGroupId() == null || projectModel.getGroupId().equals("org.apache.maven")) {
+            logger.debug("skip - unrelated pom location - " + projectModel);
             return projectModel;
         }
 
