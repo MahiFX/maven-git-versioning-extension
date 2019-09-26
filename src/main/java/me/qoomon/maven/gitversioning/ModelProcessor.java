@@ -112,6 +112,11 @@ public class ModelProcessor extends DefaultModelProcessor {
             return projectModel;
         }
 
+        if (projectModel.getPomFile() == null) {
+            logger.debug("skip - unrelated pom location - " + projectModel);
+            return projectModel;
+        }
+
         if (projectModel.getPomFile().getName().equals(GIT_VERSIONING_POM_NAME)) {
             logger.debug("skip - git versioned pom - " + projectModel.getPomFile());
             return projectModel;
