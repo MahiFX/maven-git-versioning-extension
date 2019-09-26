@@ -108,7 +108,7 @@ public class ModelProcessor extends DefaultModelProcessor {
 
     private Model processModel(Model projectModel) {
         boolean skip = Boolean.valueOf(Optional.ofNullable(System.getProperties().get(propertyKeyPrefix + "skip")).map(String::valueOf).orElse("false"));
-        if(skip){
+        if (skip) {
             logger.debug("skip - skip property set- " + projectModel.getPomFile());
             return projectModel;
         }
@@ -170,7 +170,7 @@ public class ModelProcessor extends DefaultModelProcessor {
                 }
 
                 Model parentModel = getParentModel(projectModel);
-                if (parentModel != null && isProjectPom(parentModel.getPomFile())) {
+                if (parentModel != null) {
                     if (projectModel.getVersion() != null) {
                         virtualProjectModel.setVersion(null);
                         logger.warn("Do not set version tag in a multi module project module: " + projectModel.getPomFile());
@@ -231,7 +231,7 @@ public class ModelProcessor extends DefaultModelProcessor {
             parentPom = parentPomPath;
         }
 
-        if(!parentPom.exists()){
+        if (!parentPom.exists()) {
             return null;
         }
 
@@ -239,13 +239,12 @@ public class ModelProcessor extends DefaultModelProcessor {
 
         GAV parentModelGav = GAV.of(parentModel);
         GAV parentGav = GAV.of(projectModel.getParent());
-        if(! parentModelGav.equals(parentGav)){
+        if (!parentModelGav.equals(parentGav)) {
             return null;
         }
 
-        return  parentModel;
+        return parentModel;
     }
-
 
 
     private File findMvnDir(Model projectModel) {
