@@ -4,6 +4,7 @@ import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 import com.google.inject.Key;
 import com.google.inject.OutOfScopeException;
 import me.qoomon.gitversioning.*;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.maven.building.Source;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.model.*;
@@ -18,9 +19,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.regex.Pattern;
 
 import static java.util.Collections.emptyList;
@@ -28,6 +27,7 @@ import static java.util.Collections.singletonList;
 import static java.util.Optional.ofNullable;
 import static java.util.stream.Collectors.toList;
 import static me.qoomon.UncheckedExceptions.unchecked;
+import static me.qoomon.maven.gitversioning.MavenUtil.isProjectPom;
 import static me.qoomon.maven.gitversioning.MavenUtil.readModel;
 import static me.qoomon.maven.gitversioning.VersioningMojo.*;
 
@@ -49,6 +49,7 @@ public class ModelProcessor extends DefaultModelProcessor {
     private GitVersionDetails gitVersionDetails;
 
     private final Map<String, Model> virtualProjectModelCache = new HashMap<>();
+    private Set<String> forceGroupIds = new HashSet<>();
 
     @Inject
     public ModelProcessor(final Logger logger, final SessionScope sessionScope) {
@@ -106,6 +107,7 @@ public class ModelProcessor extends DefaultModelProcessor {
     }
 
     private Model processModel(Model projectModel) {
+
         if (projectModel == null) return projectModel;
 
         boolean skip = Boolean.valueOf(Optional.ofNullable(System.getProperties().get(propertyKeyPrefix + "skip")).map(String::valueOf).orElse("false"));
@@ -114,16 +116,15 @@ public class ModelProcessor extends DefaultModelProcessor {
             return projectModel;
         }
 
-        // TODO add prop to limit to list of groupIds
-        if (projectModel.getGroupId() == null || projectModel.getGroupId().equals("org.apache.maven")) {
-            logger.debug("skip - unrelated pom location - " + projectModel);
+        if (config == null) {
+            loadConfig(projectModel);
+        }
+
+        if (!isProjectPom(projectModel.getPomFile()) && !isForceGroupId(projectModel.getGroupId())) {
+            logger.debug("skip - unrelated pom location - " + projectModel.getPomFile());
             return projectModel;
         }
 
-        if (projectModel.getPomFile() == null) {
-            logger.debug("skip - unrelated pom location - " + projectModel);
-            return projectModel;
-        }
 
         if (projectModel.getPomFile().getName().equals(GIT_VERSIONING_POM_NAME)) {
             logger.debug("skip - git versioned pom - " + projectModel.getPomFile());
@@ -136,11 +137,6 @@ public class ModelProcessor extends DefaultModelProcessor {
             return projectModel;
         }
 
-        if (config == null) {
-            File mvnDir = findMvnDir(projectModel);
-            File configFile = new File(mvnDir, BuildProperties.projectArtifactId() + ".xml");
-            config = loadConfig(configFile);
-        }
 
         if (gitVersionDetails == null) {
             gitVersionDetails = getGitVersionDetails(config, projectModel);
@@ -200,6 +196,19 @@ public class ModelProcessor extends DefaultModelProcessor {
             this.virtualProjectModelCache.put(projectModel.getArtifactId(), virtualProjectModel);
         }
         return virtualProjectModel;
+    }
+
+    private void loadConfig(Model projectModel) {
+        File mvnDir = findMvnDir(projectModel);
+        File configFile = new File(mvnDir, BuildProperties.projectArtifactId() + ".xml");
+        config = loadConfig(configFile);
+        if (StringUtils.isNotEmpty(config.forceGroupIds)) {
+            this.forceGroupIds.addAll(Arrays.asList(config.forceGroupIds.split("\\s*,\\s*")));
+        }
+    }
+
+    private boolean isForceGroupId(String groupId) {
+        return forceGroupIds.contains(groupId);
     }
 
     private GitVersionDetails getGitVersionDetails(Configuration config, Model projectModel) {

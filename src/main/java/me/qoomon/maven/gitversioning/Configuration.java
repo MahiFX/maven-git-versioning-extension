@@ -12,6 +12,8 @@ public class Configuration {
 
     public Boolean updatePom;
 
+    public String forceGroupIds;
+
     public CommitVersionDescription commit;
 
     @JacksonXmlElementWrapper(useWrapping = false)
@@ -19,6 +21,7 @@ public class Configuration {
 
     @JacksonXmlElementWrapper(useWrapping = false)
     public List<VersionDescription> tag = new ArrayList<>();
+
 
     public static class VersionDescription {
 
