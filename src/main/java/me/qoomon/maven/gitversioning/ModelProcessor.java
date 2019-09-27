@@ -110,9 +110,9 @@ public class ModelProcessor extends DefaultModelProcessor {
 
         if (projectModel == null) return projectModel;
 
-        boolean skip = Boolean.valueOf(Optional.ofNullable(System.getProperties().get(propertyKeyPrefix + "skip")).map(String::valueOf).orElse("false"));
-        if (skip) {
-            logger.debug("skip - skip property set- " + projectModel.getPomFile());
+        boolean enable = Boolean.valueOf(Optional.ofNullable(System.getProperties().get(propertyKeyPrefix + "enable")).map(String::valueOf).orElse("false"));
+        if (!enable) {
+            logger.debug("skip - enable property not set- " + projectModel.getPomFile());
             return projectModel;
         }
 
@@ -144,8 +144,7 @@ public class ModelProcessor extends DefaultModelProcessor {
 
         Model virtualProjectModel = this.virtualProjectModelCache.get(projectModel.getArtifactId());
         if (virtualProjectModel == null) {
-            logger.info(projectGav.getArtifactId() + " - set project version to " + gitVersionDetails.getVersion()
-                    + " (" + gitVersionDetails.getCommitRefType() + ":" + gitVersionDetails.getCommitRefName() + ")");
+
 
             virtualProjectModel = projectModel.clone();
 
@@ -154,6 +153,9 @@ public class ModelProcessor extends DefaultModelProcessor {
             if (projectModel.getVersion() != null) {
                 logger.debug(" replace project version");
                 virtualProjectModel.setVersion(gitVersionDetails.getVersion());
+
+                logger.info(projectGav.getArtifactId() + " - set project version to " + gitVersionDetails.getVersion()
+                        + " (" + gitVersionDetails.getCommitRefType() + ":" + gitVersionDetails.getCommitRefName() + ")");
             }
 
             virtualProjectModel.addProperty("git.commit", gitVersionDetails.getCommit());
@@ -185,6 +187,11 @@ public class ModelProcessor extends DefaultModelProcessor {
 
                     logger.debug(" replace parent version");
                     virtualProjectModel.getParent().setVersion(gitVersionDetails.getVersion());
+
+                    logger.info(projectGav.getArtifactId() + " - set project parent version to " + virtualProjectModel.getParent().getArtifactId() + ":" + gitVersionDetails.getVersion()
+                            + " (" + gitVersionDetails.getCommitRefType() + ":" + gitVersionDetails.getCommitRefName() + ")");
+
+
                 }
             }
 
