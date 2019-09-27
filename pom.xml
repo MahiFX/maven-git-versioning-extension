@@ -7,7 +7,7 @@
 
     <groupId>me.qoomon</groupId>
     <artifactId>maven-git-versioning-extension</artifactId>
-    <version>4.2.19-mahi</version>
+    <version>4.2.20-mahi</version>
     <packaging>maven-plugin</packaging>
 
     <name>Maven Git Versioning Extension</name>
@@ -167,26 +167,26 @@
             <build>
 
                 <plugins>
-<!--                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-enforcer-plugin</artifactId>
-                        <version>3.0.0-M1</version>
-                        <executions>
-                            <execution>
-                                <id>enforce-no-snapshots</id>
-                                <goals>
-                                    <goal>enforce</goal>
-                                </goals>
-                                <configuration>
-                                    <rules>
-                                        <requireReleaseDeps/>
-                                        <requireReleaseVersion/>
-                                    </rules>
-                                    <fail>true</fail>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>-->
+                    <!--                    <plugin>
+                                            <groupId>org.apache.maven.plugins</groupId>
+                                            <artifactId>maven-enforcer-plugin</artifactId>
+                                            <version>3.0.0-M1</version>
+                                            <executions>
+                                                <execution>
+                                                    <id>enforce-no-snapshots</id>
+                                                    <goals>
+                                                        <goal>enforce</goal>
+                                                    </goals>
+                                                    <configuration>
+                                                        <rules>
+                                                            <requireReleaseDeps/>
+                                                            <requireReleaseVersion/>
+                                                        </rules>
+                                                        <fail>true</fail>
+                                                    </configuration>
+                                                </execution>
+                                            </executions>
+                                        </plugin>-->
 
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
@@ -216,20 +216,20 @@
                         </executions>
                     </plugin>
 
-                   <!-- <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-gpg-plugin</artifactId>
-                        <version>1.6</version>
-                        <executions>
-                            <execution>
-                                <id>sign-artifacts</id>
-                                <phase>package</phase>
-                                <goals>
-                                    <goal>sign</goal>
-                                </goals>
-                            </execution>
-                        </executions>
-                    </plugin>-->
+                    <!-- <plugin>
+                         <groupId>org.apache.maven.plugins</groupId>
+                         <artifactId>maven-gpg-plugin</artifactId>
+                         <version>1.6</version>
+                         <executions>
+                             <execution>
+                                 <id>sign-artifacts</id>
+                                 <phase>package</phase>
+                                 <goals>
+                                     <goal>sign</goal>
+                                 </goals>
+                             </execution>
+                         </executions>
+                     </plugin>-->
 
                 </plugins>
             </build>
@@ -279,5 +279,5 @@
     </distributionManagement>
 </project>
 
-<!--Deploy to OSS Nexus-->
-<!--GPG_TTY=$(tty) mvn clean deploy -P release-->
+        <!--Deploy to OSS Nexus-->
+        <!--GPG_TTY=$(tty) mvn clean deploy -P release-->

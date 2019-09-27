@@ -48,7 +48,6 @@ public class ModelProcessor extends DefaultModelProcessor {
     private Configuration config;
     private GitVersionDetails gitVersionDetails;
 
-    private final Map<String, Model> virtualProjectModelCache = new HashMap<>();
     private Set<String> forceGroupIds = new HashSet<>();
 
     @Inject
@@ -142,66 +141,66 @@ public class ModelProcessor extends DefaultModelProcessor {
             gitVersionDetails = getGitVersionDetails(config, projectModel);
         }
 
-        Model virtualProjectModel = this.virtualProjectModelCache.get(projectModel.getArtifactId());
-        if (virtualProjectModel == null) {
+        Model virtualProjectModel = projectModel.clone();
 
-
-            virtualProjectModel = projectModel.clone();
-
-            // ---------------- process project -----------------------------------
-
-            if (projectModel.getVersion() != null) {
-                logger.debug(" replace project version");
-                virtualProjectModel.setVersion(gitVersionDetails.getVersion());
-
-                logger.info(projectGav.getArtifactId() + " - set project version to " + gitVersionDetails.getVersion()
-                        + " (" + gitVersionDetails.getCommitRefType() + ":" + gitVersionDetails.getCommitRefName() + ")");
-            }
-
-            virtualProjectModel.addProperty("git.commit", gitVersionDetails.getCommit());
-            virtualProjectModel.addProperty("git.ref", gitVersionDetails.getCommitRefName());
-            virtualProjectModel.addProperty("git." + gitVersionDetails.getCommitRefType(), gitVersionDetails.getCommitRefName());
-            for (Map.Entry<String, String> entry : gitVersionDetails.getMetaData().entrySet()) {
-                virtualProjectModel.addProperty("git.ref." + entry.getKey(), entry.getValue());
-            }
-
-            // ---------------- process parent -----------------------------------
-
-            final Parent parent = projectModel.getParent();
-            if (parent != null) {
-
-                if (parent.getVersion() == null) {
-                    logger.warn("skip - invalid model - parent 'version' is missing - " + projectModel.getPomFile());
-                    return projectModel;
-                }
-
-                Model parentModel = getParentModel(projectModel);
-                if (parentModel != null) {
-                    if (projectModel.getVersion() != null) {
-                        virtualProjectModel.setVersion(null);
-                        logger.warn("Do not set version tag in a multi module project module: " + projectModel.getPomFile());
-                        if (!projectModel.getVersion().equals(parent.getVersion())) {
-                            throw new IllegalStateException("'version' has to be equal to parent 'version'");
-                        }
-                    }
-
-                    logger.debug(" replace parent version");
-                    virtualProjectModel.getParent().setVersion(gitVersionDetails.getVersion());
-
-                    logger.info(projectGav.getArtifactId() + " - set project parent version to " + virtualProjectModel.getParent().getArtifactId() + ":" + gitVersionDetails.getVersion()
-                            + " (" + gitVersionDetails.getCommitRefType() + ":" + gitVersionDetails.getCommitRefName() + ")");
-
-
-                }
-            }
-
-            // ---------------- add plugin ---------------------------------------
-
-            boolean updatePomOption = getUpdatePomOption(config, gitVersionDetails);
-            addBuildPlugin(virtualProjectModel, updatePomOption);
-
-            this.virtualProjectModelCache.put(projectModel.getArtifactId(), virtualProjectModel);
+        if (virtualProjectModel.getProperties().contains("git.processed") {
+            return virtualProjectModel;
         }
+
+        // ---------------- process project -----------------------------------
+
+        if (projectModel.getVersion() != null) {
+            logger.debug(" replace project version");
+            virtualProjectModel.setVersion(gitVersionDetails.getVersion());
+
+            logger.info(projectGav.getArtifactId() + " - set project version to " + gitVersionDetails.getVersion()
+                    + " (" + gitVersionDetails.getCommitRefType() + ":" + gitVersionDetails.getCommitRefName() + ")");
+        }
+
+        virtualProjectModel.addProperty("git.commit", gitVersionDetails.getCommit());
+        virtualProjectModel.addProperty("git.ref", gitVersionDetails.getCommitRefName());
+        virtualProjectModel.addProperty("git." + gitVersionDetails.getCommitRefType(), gitVersionDetails.getCommitRefName());
+        for (Map.Entry<String, String> entry : gitVersionDetails.getMetaData().entrySet()) {
+            virtualProjectModel.addProperty("git.ref." + entry.getKey(), entry.getValue());
+        }
+
+        // ---------------- process parent -----------------------------------
+
+        final Parent parent = projectModel.getParent();
+        if (parent != null) {
+
+            if (parent.getVersion() == null) {
+                logger.warn("skip - invalid model - parent 'version' is missing - " + projectModel.getPomFile());
+                return projectModel;
+            }
+
+            Model parentModel = getParentModel(projectModel);
+            if (parentModel != null) {
+                if (projectModel.getVersion() != null) {
+                    virtualProjectModel.setVersion(null);
+                    logger.warn("Do not set version tag in a multi module project module: " + projectModel.getPomFile());
+                    if (!projectModel.getVersion().equals(parent.getVersion())) {
+                        throw new IllegalStateException("'version' has to be equal to parent 'version'");
+                    }
+                }
+
+                logger.debug(" replace parent version");
+                virtualProjectModel.getParent().setVersion(gitVersionDetails.getVersion());
+
+                logger.info(projectGav.getArtifactId() + " - set project parent version to " + virtualProjectModel.getParent().getArtifactId() + ":" + gitVersionDetails.getVersion()
+                        + " (" + gitVersionDetails.getCommitRefType() + ":" + gitVersionDetails.getCommitRefName() + ")");
+
+
+            }
+        }
+
+        // ---------------- add plugin ---------------------------------------
+
+        boolean updatePomOption = getUpdatePomOption(config, gitVersionDetails);
+        addBuildPlugin(virtualProjectModel, updatePomOption);
+
+        virtualProjectModel.addProperty("git.processed", "true");
+
         return virtualProjectModel;
     }
 
