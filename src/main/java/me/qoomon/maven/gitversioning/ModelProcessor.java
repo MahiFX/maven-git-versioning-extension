@@ -143,7 +143,7 @@ public class ModelProcessor extends DefaultModelProcessor {
 
         Model virtualProjectModel = projectModel.clone();
 
-        if (virtualProjectModel.getProperties().contains("git.processed") {
+        if (virtualProjectModel.getProperties().contains("git.processed")) {
             return virtualProjectModel;
         }
 
