@@ -147,23 +147,6 @@ public class ModelProcessor extends DefaultModelProcessor {
             return virtualProjectModel;
         }
 
-        // ---------------- process project -----------------------------------
-
-        if (projectModel.getVersion() != null) {
-            logger.debug(" replace project version");
-            virtualProjectModel.setVersion(gitVersionDetails.getVersion());
-
-            logger.info(projectGav.getArtifactId() + " - set project version to " + gitVersionDetails.getVersion()
-                    + " (" + gitVersionDetails.getCommitRefType() + ":" + gitVersionDetails.getCommitRefName() + ")");
-        }
-
-        virtualProjectModel.addProperty("git.commit", gitVersionDetails.getCommit());
-        virtualProjectModel.addProperty("git.ref", gitVersionDetails.getCommitRefName());
-        virtualProjectModel.addProperty("git." + gitVersionDetails.getCommitRefType(), gitVersionDetails.getCommitRefName());
-        for (Map.Entry<String, String> entry : gitVersionDetails.getMetaData().entrySet()) {
-            virtualProjectModel.addProperty("git.ref." + entry.getKey(), entry.getValue());
-        }
-
         // ---------------- process parent -----------------------------------
 
         final Parent parent = projectModel.getParent();
@@ -193,6 +176,24 @@ public class ModelProcessor extends DefaultModelProcessor {
 
             }
         }
+
+        // ---------------- process project -----------------------------------
+
+        if (projectModel.getVersion() != null) {
+            logger.debug(" replace project version");
+            virtualProjectModel.setVersion(gitVersionDetails.getVersion());
+
+            logger.info(projectGav.getArtifactId() + " - set project version to " + gitVersionDetails.getVersion()
+                    + " (" + gitVersionDetails.getCommitRefType() + ":" + gitVersionDetails.getCommitRefName() + ")");
+        }
+
+        virtualProjectModel.addProperty("git.commit", gitVersionDetails.getCommit());
+        virtualProjectModel.addProperty("git.ref", gitVersionDetails.getCommitRefName());
+        virtualProjectModel.addProperty("git." + gitVersionDetails.getCommitRefType(), gitVersionDetails.getCommitRefName());
+        for (Map.Entry<String, String> entry : gitVersionDetails.getMetaData().entrySet()) {
+            virtualProjectModel.addProperty("git.ref." + entry.getKey(), entry.getValue());
+        }
+
 
         // ---------------- add plugin ---------------------------------------
 
