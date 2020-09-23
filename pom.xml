@@ -236,45 +236,19 @@
         </profile>
     </profiles>
 
-    <repositories>
-        <repository>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-            <id>releases</id>
-            <name>releases</name>
-            <url>http://build.mahifx.com:8081/nexus/content/repositories/release</url>
-        </repository>
-
-        <repository>
-            <releases>
-                <enabled>false</enabled>
-            </releases>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-            <id>snapshots</id>
-            <name>snapshots</name>
-            <url>http://build.mahifx.com:8081/nexus/content/repositories/snapshot</url>
-        </repository>
-    </repositories>
-
     <distributionManagement>
         <repository>
             <uniqueVersion>false</uniqueVersion>
             <id>releases</id>
             <name>releases</name>
-            <url>http://build.mahifx.com:8081/nexus/content/repositories/releases</url>
+            <url>http://build.mahifx.com/nexus/content/repositories/thirdparty</url>
         </repository>
 
         <snapshotRepository>
             <uniqueVersion>false</uniqueVersion>
             <id>snapshots</id>
             <name>snapshots</name>
-            <url>http://build.mahifx.com:8081/nexus/content/repositories/snapshots</url>
+            <url>http://build.mahifx.com/nexus/content/repositories/thirdpartysnapshots</url>
         </snapshotRepository>
     </distributionManagement>
 </project>
