@@ -4,6 +4,7 @@ import de.pdark.decentxml.Document;
 import de.pdark.decentxml.Element;
 import de.pdark.decentxml.XMLParser;
 import de.pdark.decentxml.XMLStringSource;
+import org.apache.maven.model.Build;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.Plugin;
 import org.apache.maven.plugin.AbstractMojo;
@@ -45,13 +46,16 @@ public class VersioningMojo extends AbstractMojo {
     public synchronized void execute() throws MojoExecutionException {
         try {
             // read plugin properties
-            final boolean configUpdatePom = Boolean.valueOf(
+            final boolean configUpdatePom = Boolean.parseBoolean(
                     project.getProperties().getProperty(propertyKeyPrefix + propertyKeyUpdatePom));
 
             // remove plugin and properties
             getLog().debug(project.getModel().getArtifactId() + "remove this plugin and plugin properties from model");
             Model originalModel = project.getOriginalModel();
-            originalModel.getBuild().removePlugin(asPlugin());
+            Build build = originalModel.getBuild();
+            if(build != null) {
+                build.removePlugin(asPlugin());
+            }
             new HashSet<>(originalModel.getProperties().keySet()).forEach(key -> {
                 if (((String) key).startsWith(propertyKeyPrefix)) {
                     originalModel.getProperties().remove(key);

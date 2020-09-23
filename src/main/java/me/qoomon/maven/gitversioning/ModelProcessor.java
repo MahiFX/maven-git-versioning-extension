@@ -48,7 +48,7 @@ public class ModelProcessor extends DefaultModelProcessor {
     private Configuration config;
     private GitVersionDetails gitVersionDetails;
 
-    private Set<String> forceGroupIds = new HashSet<>();
+    private final Set<String> forceGroupIds = new HashSet<>();
 
     @Inject
     public ModelProcessor(final Logger logger, final SessionScope sessionScope) {
@@ -109,7 +109,7 @@ public class ModelProcessor extends DefaultModelProcessor {
 
         if (projectModel == null) return projectModel;
 
-        boolean enable = Boolean.valueOf(Optional.ofNullable(System.getProperties().get(propertyKeyPrefix + "enable")).map(String::valueOf).orElse("false"));
+        boolean enable = Boolean.parseBoolean(Optional.ofNullable(System.getProperties().get(propertyKeyPrefix + "enable")).map(String::valueOf).orElse("false"));
         if (!enable) {
             logger.debug("skip - enable property not set- " + projectModel.getPomFile());
             return projectModel;
@@ -124,23 +124,16 @@ public class ModelProcessor extends DefaultModelProcessor {
             return projectModel;
         }
 
-
         if (projectModel.getPomFile().getName().equals(GIT_VERSIONING_POM_NAME)) {
             logger.debug("skip - git versioned pom - " + projectModel.getPomFile());
             return projectModel;
         }
 
-        GAV projectGav = GAV.of(projectModel);
-        if (projectGav.getVersion() == null) {
-            logger.debug("skip - invalid model - 'version' is missing - " + projectModel.getPomFile());
-            return projectModel;
-        }
-
-
         if (gitVersionDetails == null) {
             gitVersionDetails = getGitVersionDetails(config, projectModel);
         }
 
+        GAV projectGav = GAV.of(projectModel);
         Model virtualProjectModel = projectModel.clone();
 
         if (virtualProjectModel.getProperties().contains("git.processed")) {
@@ -152,34 +145,17 @@ public class ModelProcessor extends DefaultModelProcessor {
         final Parent parent = projectModel.getParent();
         if (parent != null) {
 
-            if (parent.getVersion() == null) {
-                logger.warn("skip - invalid model - parent 'version' is missing - " + projectModel.getPomFile());
-                return projectModel;
-            }
-
-            Model parentModel = getParentModel(projectModel);
-            if (parentModel != null) {
-                if (projectModel.getVersion() != null) {
-                    virtualProjectModel.setVersion(null);
-                    logger.warn("Do not set version tag in a multi module project module: " + projectModel.getPomFile());
-                    if (!projectModel.getVersion().equals(parent.getVersion())) {
-                        throw new IllegalStateException("'version' has to be equal to parent 'version'");
-                    }
-                }
-
+            if (!gitVersionDetails.getVersion().equals(virtualProjectModel.getParent().getVersion())) {
                 logger.debug(" replace parent version");
                 virtualProjectModel.getParent().setVersion(gitVersionDetails.getVersion());
-
                 logger.info(projectGav.getArtifactId() + " - set project parent version to " + virtualProjectModel.getParent().getArtifactId() + ":" + gitVersionDetails.getVersion()
                         + " (" + gitVersionDetails.getCommitRefType() + ":" + gitVersionDetails.getCommitRefName() + ")");
-
-
             }
         }
 
         // ---------------- process project -----------------------------------
 
-        if (projectModel.getVersion() != null) {
+        if (projectModel.getVersion() != null && !gitVersionDetails.getVersion().equals(virtualProjectModel.getVersion())) {
             logger.debug(" replace project version");
             virtualProjectModel.setVersion(gitVersionDetails.getVersion());
 
