@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
 
     <modelVersion>4.0.0</modelVersion>
 
@@ -10,34 +10,58 @@
     <packaging>pom</packaging>
 
     <properties>
-        <foo>${basedir}/src/main/fuxx</foo>
+        <foo>${basedir}</foo>
+        <bar>${basedir}/src/main/fuxx</bar>
+        <moo>${skipTests}</moo>
     </properties>
 
     <modules>
-        <module>api</module>
+        <module>api/pom.xml</module>
         <module>logic</module>
+        <module>nested</module>
     </modules>
 
     <dependencyManagement>
         <dependencies>
             <dependency>
-                <groupId>${project.groupId}</groupId>
+                <groupId>multi-module-project</groupId>
                 <artifactId>api</artifactId>
-                <version>${project.version}</version>
+                <version>0.0.0</version>
             </dependency>
             <dependency>
-                <groupId>${project.groupId}</groupId>
+                <groupId>multi-module-project</groupId>
                 <artifactId>logic</artifactId>
-                <version>${project.version}</version>
+                <version>0.0.0</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
 
-    <distributionManagement>
-        <repository>
-            <id>absolute directory</id>
-            <url>file:${maven.multiModuleProjectDirectory}/.m2</url>
-        </repository>
-    </distributionManagement>
+    <build>
+        <plugins>
+        </plugins>
+    </build>
 
+    <profiles>
+        <profile>
+            <id>foo</id>
+            <properties>
+                <foo>${basedir}</foo>
+                <bar>${basedir}/src/main/fuxx</bar>
+                <moo>${skipTests}</moo>
+            </properties>
+        </profile>
+    </profiles>
+
+    <reporting>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-project-info-reports-plugin</artifactId>
+                <version>2.6</version>
+            </plugin>
+        </plugins>
+    </reporting>
 </project>
+
+<!--mvn install -Dmaven.repo.local=$PWD/.m2/repository-->
+

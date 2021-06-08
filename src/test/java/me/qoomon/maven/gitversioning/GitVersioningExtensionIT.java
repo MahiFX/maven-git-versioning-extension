@@ -1,8 +1,8 @@
 package me.qoomon.maven.gitversioning;
 
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 import me.qoomon.maven.gitversioning.Configuration.VersionDescription;
-import org.apache.maven.it.VerificationException;
 import org.apache.maven.it.Verifier;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.DependencyManagement;
@@ -10,8 +10,6 @@ import org.apache.maven.model.Model;
 import org.apache.maven.model.Parent;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.revwalk.RevCommit;
-import org.eclipse.jgit.util.FileUtils;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -21,9 +19,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import static me.qoomon.gitversioning.GitConstants.NO_COMMIT;
+import static me.qoomon.maven.gitversioning.GitVersioningModelProcessor.GIT_VERSIONING_POM_NAME;
 import static me.qoomon.maven.gitversioning.MavenUtil.readModel;
-import static me.qoomon.maven.gitversioning.VersioningMojo.GIT_VERSIONING_POM_NAME;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
@@ -39,39 +36,27 @@ class GitVersioningExtensionIT {
         setVersion("0.0.0");
     }};
 
-    Configuration extensionConfig = new Configuration();
-
-
-    @BeforeEach
-    void beforeEach() throws VerificationException, IOException {
-        writeModel(projectDir.resolve("pom.xml").toFile(), pomModel);
-        Verifier prepareVerifier = new Verifier(projectDir.toFile().getAbsolutePath());
-        prepareVerifier.executeGoal("dependency:purge-local-repository");
-        prepareVerifier.addCliOption("-DmanualInclude=test");
-        prepareVerifier.addCliOption("-DreResolve=false");
-    }
-
-
     @Test
     void commitVersioning() throws Exception {
         // Given
-        Git.init().setDirectory(projectDir.toFile()).call();
+        Git.init().setInitialBranch("master").setDirectory(projectDir.toFile()).call();
 
         writeModel(projectDir.resolve("pom.xml").toFile(), pomModel);
         writeExtensionsFile(projectDir);
-        writeExtensionConfigFile(projectDir, extensionConfig);
+        writeExtensionConfigFile(projectDir, new Configuration());
 
         // When
         Verifier verifier = new Verifier(projectDir.toFile().getAbsolutePath());
+        verifier.setMavenDebug(true);
         verifier.executeGoal("verify");
 
         // Then
         String log = getLog(verifier);
         assertThat(log).doesNotContain("[ERROR]", "[FATAL]");
-        String expectedVersion = NO_COMMIT;
+        String expectedVersion = "master-SNAPSHOT";
         assertThat(log).contains("Building " + pomModel.getArtifactId() + " " + expectedVersion);
 
-        Model gitVersionedPomModel = readModel(projectDir.resolve("target/").resolve(GIT_VERSIONING_POM_NAME).toFile());
+        Model gitVersionedPomModel = readModel(projectDir.resolve(GIT_VERSIONING_POM_NAME).toFile());
         assertThat(gitVersionedPomModel).satisfies(it -> assertSoftly(softly -> {
             softly.assertThat(it.getModelVersion()).isEqualTo(pomModel.getModelVersion());
             softly.assertThat(it.getGroupId()).isEqualTo(pomModel.getGroupId());
@@ -87,7 +72,7 @@ class GitVersioningExtensionIT {
     @Test
     void branchVersioning() throws Exception {
         // Given
-        Git git = Git.init().setDirectory(projectDir.toFile()).call();
+        Git git = Git.init().setInitialBranch("master").setDirectory(projectDir.toFile()).call();
         RevCommit givenCommit = git.commit().setMessage("initial commit").setAllowEmpty(true).call();
         String givenBranch = "feature/test";
         git.branchCreate().setName(givenBranch).call();
@@ -96,10 +81,8 @@ class GitVersioningExtensionIT {
         writeModel(projectDir.resolve("pom.xml").toFile(), pomModel);
         writeExtensionsFile(projectDir);
 
-        VersionDescription branchVersionDescription = new VersionDescription();
-        branchVersionDescription.pattern = ".*";
-        branchVersionDescription.versionFormat = "${branch}-gitVersioning";
-        extensionConfig.branch.add(branchVersionDescription);
+        Configuration extensionConfig = new Configuration();
+        extensionConfig.branch.add(createBranchVersionDescription());
         writeExtensionConfigFile(projectDir, extensionConfig);
 
         // When
@@ -111,7 +94,7 @@ class GitVersioningExtensionIT {
         assertThat(log).doesNotContain("[ERROR]", "[FATAL]");
         String expectedVersion = givenBranch.replace("/", "-") + "-gitVersioning";
         assertThat(log).contains("Building " + pomModel.getArtifactId() + " " + expectedVersion);
-        Model gitVersionedPomModel = readModel(projectDir.resolve("target/").resolve(GIT_VERSIONING_POM_NAME).toFile());
+        Model gitVersionedPomModel = readModel(projectDir.resolve(GIT_VERSIONING_POM_NAME).toFile());
         assertThat(gitVersionedPomModel).satisfies(it -> assertSoftly(softly -> {
             softly.assertThat(it.getModelVersion()).isEqualTo(pomModel.getModelVersion());
             softly.assertThat(it.getGroupId()).isEqualTo(pomModel.getGroupId());
@@ -126,21 +109,44 @@ class GitVersioningExtensionIT {
     }
 
     @Test
-    void tagVersioning() throws Exception {
+    void outsideGitVersioning() throws Exception {
         // Given
-        Git git = Git.init().setDirectory(projectDir.toFile()).call();
+
+        writeModel(projectDir.resolve("pom.xml").toFile(), pomModel);
+        writeExtensionsFile(projectDir);
+        writeExtensionConfigFile(projectDir, new Configuration());
+
+        // When
+        Verifier verifier = new Verifier(projectDir.toFile().getAbsolutePath());
+        verifier.executeGoal("verify");
+
+        // Then
+        String log = getLog(verifier);
+        assertThat(log).doesNotContain("[ERROR]", "[FATAL]");
+        String expectedVersion = "0.0.0";
+        assertThat(log).contains("Building " + pomModel.getArtifactId() + " " + expectedVersion);
+
+        assertThat(projectDir.resolve(GIT_VERSIONING_POM_NAME).toFile().exists()).isEqualTo(false);
+        assertThat(log).contains("[WARNING] skip - project is not part of a git repository");
+    }
+
+    @Test
+    void tagVersioning_annotated_detached() throws Exception {
+        // Given
+        Git git = Git.init().setInitialBranch("master").setDirectory(projectDir.toFile()).call();
         RevCommit givenCommit = git.commit().setMessage("initial commit").setAllowEmpty(true).call();
         String givenTag = "v1";
-        git.tag().setName(givenTag).call();
+
+        git.tag().setAnnotated(true).setName(givenTag).call();
         git.checkout().setName(givenTag).call();
 
         writeModel(projectDir.resolve("pom.xml").toFile(), pomModel);
         writeExtensionsFile(projectDir);
 
-        VersionDescription tagVersionDescription = new VersionDescription();
-        tagVersionDescription.pattern = ".*";
-        tagVersionDescription.versionFormat = "${tag}-gitVersioning";
-        extensionConfig.tag.add(tagVersionDescription);
+        Configuration extensionConfig = new Configuration();
+        extensionConfig.preferTags = false;
+        extensionConfig.branch.add(createBranchVersionDescription());
+        extensionConfig.tag.add(createTagVersionDescription());
         writeExtensionConfigFile(projectDir, extensionConfig);
 
         // When
@@ -152,7 +158,248 @@ class GitVersioningExtensionIT {
         assertThat(log).doesNotContain("[ERROR]", "[FATAL]");
         String expectedVersion = givenTag + "-gitVersioning";
         assertThat(log).contains("Building " + pomModel.getArtifactId() + " " + expectedVersion);
-        Model gitVersionedPomModel = readModel(projectDir.resolve("target/").resolve(GIT_VERSIONING_POM_NAME).toFile());
+        Model gitVersionedPomModel = readModel(projectDir.resolve(GIT_VERSIONING_POM_NAME).toFile());
+        assertThat(gitVersionedPomModel).satisfies(it -> assertSoftly(softly -> {
+            softly.assertThat(it.getModelVersion()).isEqualTo(pomModel.getModelVersion());
+            softly.assertThat(it.getGroupId()).isEqualTo(pomModel.getGroupId());
+            softly.assertThat(it.getArtifactId()).isEqualTo(pomModel.getArtifactId());
+            softly.assertThat(it.getVersion()).isEqualTo(expectedVersion);
+            softly.assertThat(it.getProperties()).doesNotContainKeys(
+                    "git.commit",
+                    "git.ref",
+                    "git.tag"
+            );
+        }));
+    }
+
+    @Test
+    void tagVersioning_nonAnnotatedTagNotDetached() throws Exception {
+        // Given
+        Git git = Git.init().setInitialBranch("master").setDirectory(projectDir.toFile()).call();
+        RevCommit givenCommit = git.commit().setMessage("initial commit").setAllowEmpty(true).call();
+        String givenTag = "v1";
+
+        git.tag().setAnnotated(false).setName(givenTag).call();
+
+        writeModel(projectDir.resolve("pom.xml").toFile(), pomModel);
+        writeExtensionsFile(projectDir);
+
+        Configuration extensionConfig = new Configuration();
+        extensionConfig.preferTags = true;
+        extensionConfig.branch.add(createBranchVersionDescription());
+        extensionConfig.tag.add(createTagVersionDescription());
+        writeExtensionConfigFile(projectDir, extensionConfig);
+
+        // When
+        Verifier verifier = new Verifier(projectDir.toFile().getAbsolutePath());
+        verifier.executeGoal("verify");
+
+        // Then
+        String log = getLog(verifier);
+        assertThat(log).doesNotContain("[ERROR]", "[FATAL]");
+        String expectedVersion = givenTag + "-gitVersioning";
+        assertThat(log).contains("Building " + pomModel.getArtifactId() + " " + expectedVersion);
+        Model gitVersionedPomModel = readModel(projectDir.resolve(GIT_VERSIONING_POM_NAME).toFile());
+        assertThat(gitVersionedPomModel).satisfies(it -> assertSoftly(softly -> {
+            softly.assertThat(it.getModelVersion()).isEqualTo(pomModel.getModelVersion());
+            softly.assertThat(it.getGroupId()).isEqualTo(pomModel.getGroupId());
+            softly.assertThat(it.getArtifactId()).isEqualTo(pomModel.getArtifactId());
+            softly.assertThat(it.getVersion()).isEqualTo(expectedVersion);
+            softly.assertThat(it.getProperties()).doesNotContainKeys(
+                    "git.commit",
+                    "git.ref",
+                    "git.tag"
+            );
+        }));
+    }
+
+    @Test
+    void tagVersioning_cliOption_gitTag() throws Exception {
+        // Given
+        Git git = Git.init().setInitialBranch("master").setDirectory(projectDir.toFile()).call();
+        RevCommit givenCommit = git.commit().setMessage("initial commit").setAllowEmpty(true).call();
+        String givenTag = "v1";
+
+        writeModel(projectDir.resolve("pom.xml").toFile(), pomModel);
+        writeExtensionsFile(projectDir);
+
+        Configuration extensionConfig = new Configuration();
+        extensionConfig.tag.add(createTagVersionDescription());
+        writeExtensionConfigFile(projectDir, extensionConfig);
+
+        // When
+        Verifier verifier = new Verifier(projectDir.toFile().getAbsolutePath());
+        verifier.addCliOption("-Dgit.tag=" + givenTag);
+        verifier.executeGoal("verify");
+
+        // Then
+        String log = getLog(verifier);
+        assertThat(log).doesNotContain("[ERROR]", "[FATAL]");
+        String expectedVersion = givenTag + "-gitVersioning";
+        assertThat(log).contains("Building " + pomModel.getArtifactId() + " " + expectedVersion);
+        Model gitVersionedPomModel = readModel(projectDir.resolve(GIT_VERSIONING_POM_NAME).toFile());
+        assertThat(gitVersionedPomModel).satisfies(it -> assertSoftly(softly -> {
+            softly.assertThat(it.getModelVersion()).isEqualTo(pomModel.getModelVersion());
+            softly.assertThat(it.getGroupId()).isEqualTo(pomModel.getGroupId());
+            softly.assertThat(it.getArtifactId()).isEqualTo(pomModel.getArtifactId());
+            softly.assertThat(it.getVersion()).isEqualTo(expectedVersion);
+            softly.assertThat(it.getProperties()).doesNotContainKeys(
+                    "git.commit",
+                    "git.ref",
+                    "git.tag"
+            );
+        }));
+    }
+
+    @Test
+    void tagVersioning_cliOption_preferTags_true() throws Exception {
+        // Given
+        Git git = Git.init().setInitialBranch("master").setDirectory(projectDir.toFile()).call();
+        RevCommit givenCommit = git.commit().setMessage("initial commit").setAllowEmpty(true).call();
+        String givenTag = "v1";
+
+        git.tag().setAnnotated(false).setName(givenTag).call();
+
+        writeModel(projectDir.resolve("pom.xml").toFile(), pomModel);
+        writeExtensionsFile(projectDir);
+
+        Configuration extensionConfig = new Configuration();
+        extensionConfig.branch.add(createBranchVersionDescription());
+        extensionConfig.tag.add(createTagVersionDescription());
+        writeExtensionConfigFile(projectDir, extensionConfig);
+
+        // When
+        Verifier verifier = new Verifier(projectDir.toFile().getAbsolutePath());
+        verifier.addCliOption("-Dversioning.preferTags=true");
+        verifier.executeGoal("verify");
+
+        // Then
+        String log = getLog(verifier);
+        assertThat(log).doesNotContain("[ERROR]", "[FATAL]");
+        String expectedVersion = givenTag + "-gitVersioning";
+        assertThat(log).contains("Building " + pomModel.getArtifactId() + " " + expectedVersion);
+        Model gitVersionedPomModel = readModel(projectDir.resolve(GIT_VERSIONING_POM_NAME).toFile());
+        assertThat(gitVersionedPomModel).satisfies(it -> assertSoftly(softly -> {
+            softly.assertThat(it.getModelVersion()).isEqualTo(pomModel.getModelVersion());
+            softly.assertThat(it.getGroupId()).isEqualTo(pomModel.getGroupId());
+            softly.assertThat(it.getArtifactId()).isEqualTo(pomModel.getArtifactId());
+            softly.assertThat(it.getVersion()).isEqualTo(expectedVersion);
+            softly.assertThat(it.getProperties()).doesNotContainKeys(
+                    "git.commit",
+                    "git.ref",
+                    "git.tag"
+            );
+        }));
+    }
+
+    @Test
+    void tagVersioning_cliOption_preferTags_false() throws Exception {
+        // Given
+        Git git = Git.init().setInitialBranch("master").setDirectory(projectDir.toFile()).call();
+        RevCommit givenCommit = git.commit().setMessage("initial commit").setAllowEmpty(true).call();
+        String givenTag = "v1";
+
+        git.tag().setAnnotated(false).setName(givenTag).call();
+
+        writeModel(projectDir.resolve("pom.xml").toFile(), pomModel);
+        writeExtensionsFile(projectDir);
+
+        Configuration extensionConfig = new Configuration();
+        extensionConfig.branch.add(createBranchVersionDescription());
+        extensionConfig.tag.add(createTagVersionDescription());
+        extensionConfig.preferTags = true;
+        writeExtensionConfigFile(projectDir, extensionConfig);
+
+        // When
+        Verifier verifier = new Verifier(projectDir.toFile().getAbsolutePath());
+        verifier.addCliOption("-Dversioning.preferTags=false");
+        verifier.executeGoal("verify");
+
+        // Then
+        String log = getLog(verifier);
+        assertThat(log).doesNotContain("[ERROR]", "[FATAL]");
+        String expectedVersion = "master-gitVersioning";
+        assertThat(log).contains("Building " + pomModel.getArtifactId() + " " + expectedVersion);
+        Model gitVersionedPomModel = readModel(projectDir.resolve(GIT_VERSIONING_POM_NAME).toFile());
+        assertThat(gitVersionedPomModel).satisfies(it -> assertSoftly(softly -> {
+            softly.assertThat(it.getModelVersion()).isEqualTo(pomModel.getModelVersion());
+            softly.assertThat(it.getGroupId()).isEqualTo(pomModel.getGroupId());
+            softly.assertThat(it.getArtifactId()).isEqualTo(pomModel.getArtifactId());
+            softly.assertThat(it.getVersion()).isEqualTo(expectedVersion);
+            softly.assertThat(it.getProperties()).doesNotContainKeys(
+                    "git.commit",
+                    "git.ref",
+                    "git.tag"
+            );
+        }));
+    }
+
+    @Test
+    void tagVersioning_cliOption_conflictingTag() throws Exception {
+        // Given
+        Git git = Git.init().setInitialBranch("master").setDirectory(projectDir.toFile()).call();
+        RevCommit givenCommit = git.commit().setMessage("initial commit").setAllowEmpty(true).call();
+        String givenTag = "v1";
+
+        git.tag().setAnnotated(false).setName("v2").call();
+
+        writeModel(projectDir.resolve("pom.xml").toFile(), pomModel);
+        writeExtensionsFile(projectDir);
+
+        Configuration extensionConfig = new Configuration();
+        extensionConfig.tag.add(createTagVersionDescription());
+        writeExtensionConfigFile(projectDir, extensionConfig);
+
+        // When
+        Verifier verifier = new Verifier(projectDir.toFile().getAbsolutePath());
+        verifier.addCliOption("-Dgit.tag=" + givenTag);
+        verifier.executeGoal("verify");
+
+        // Then
+        String log = getLog(verifier);
+        assertThat(log).doesNotContain("[ERROR]", "[FATAL]");
+        String expectedVersion = givenTag + "-gitVersioning";
+        assertThat(log).contains("Building " + pomModel.getArtifactId() + " " + expectedVersion);
+        Model gitVersionedPomModel = readModel(projectDir.resolve(GIT_VERSIONING_POM_NAME).toFile());
+        assertThat(gitVersionedPomModel).satisfies(it -> assertSoftly(softly -> {
+            softly.assertThat(it.getModelVersion()).isEqualTo(pomModel.getModelVersion());
+            softly.assertThat(it.getGroupId()).isEqualTo(pomModel.getGroupId());
+            softly.assertThat(it.getArtifactId()).isEqualTo(pomModel.getArtifactId());
+            softly.assertThat(it.getVersion()).isEqualTo(expectedVersion);
+            softly.assertThat(it.getProperties()).doesNotContainKeys(
+                    "git.commit",
+                    "git.ref",
+                    "git.tag"
+            );
+        }));
+    }
+
+    @Test
+    void tagVersioning_cliOption_withBranch() throws Exception {
+        // Given
+        Git git = Git.init().setInitialBranch("master").setDirectory(projectDir.toFile()).call();
+        RevCommit givenCommit = git.commit().setMessage("initial commit").setAllowEmpty(true).call();
+        String givenTag = "v1";
+
+        writeModel(projectDir.resolve("pom.xml").toFile(), pomModel);
+        writeExtensionsFile(projectDir);
+
+        Configuration extensionConfig = new Configuration();
+        extensionConfig.branch.add(createBranchVersionDescription());
+        extensionConfig.tag.add(createTagVersionDescription());
+        writeExtensionConfigFile(projectDir, extensionConfig);
+
+        // When
+        Verifier verifier = new Verifier(projectDir.toFile().getAbsolutePath());
+        verifier.addCliOption("-Dgit.tag=" + givenTag);
+        verifier.executeGoal("verify");
+
+        // Then
+        String log = getLog(verifier);
+        assertThat(log).doesNotContain("[ERROR]", "[FATAL]");
+        String expectedVersion = givenTag + "-gitVersioning";
+        assertThat(log).contains("Building " + pomModel.getArtifactId() + " " + expectedVersion);
+        Model gitVersionedPomModel = readModel(projectDir.resolve(GIT_VERSIONING_POM_NAME).toFile());
         assertThat(gitVersionedPomModel).satisfies(it -> assertSoftly(softly -> {
             softly.assertThat(it.getModelVersion()).isEqualTo(pomModel.getModelVersion());
             softly.assertThat(it.getGroupId()).isEqualTo(pomModel.getGroupId());
@@ -169,7 +416,7 @@ class GitVersioningExtensionIT {
     @Test
     void commitVersioning_multiModuleProject() throws Exception {
         // Given
-        Git.init().setDirectory(projectDir.toFile()).call();
+        Git.init().setInitialBranch("master").setDirectory(projectDir.toFile()).call();
 
         pomModel.setPackaging("pom");
         pomModel.addModule("api");
@@ -188,7 +435,7 @@ class GitVersioningExtensionIT {
         }});
         writeModel(projectDir.resolve("pom.xml").toFile(), pomModel);
         writeExtensionsFile(projectDir);
-        writeExtensionConfigFile(projectDir, extensionConfig);
+        writeExtensionConfigFile(projectDir, new Configuration());
 
         Path apiProjectDir = Files.createDirectories(projectDir.resolve("api"));
         Model apiPomModel = writeModel(apiProjectDir.resolve("pom.xml").toFile(), new Model() {{
@@ -220,9 +467,9 @@ class GitVersioningExtensionIT {
         // Then
         String log = getLog(verifier);
         assertThat(log).doesNotContain("[ERROR]", "[FATAL]");
-        String expectedVersion = NO_COMMIT;
+        String expectedVersion = "master-SNAPSHOT";
         assertThat(log).contains("Building " + pomModel.getArtifactId() + " " + expectedVersion);
-        Model gitVersionedPomModel = readModel(projectDir.resolve("target/").resolve(GIT_VERSIONING_POM_NAME).toFile());
+        Model gitVersionedPomModel = readModel(projectDir.resolve(GIT_VERSIONING_POM_NAME).toFile());
         assertThat(gitVersionedPomModel).satisfies(it -> assertSoftly(softly -> {
             softly.assertThat(it.getModelVersion()).isEqualTo(pomModel.getModelVersion());
             softly.assertThat(it.getGroupId()).isEqualTo(pomModel.getGroupId());
@@ -234,20 +481,20 @@ class GitVersioningExtensionIT {
             );
         }));
 
-        Model apiGitVersionedPomModel = readModel(apiProjectDir.resolve("target/").resolve(GIT_VERSIONING_POM_NAME).toFile());
+        Model apiGitVersionedPomModel = readModel(apiProjectDir.resolve(GIT_VERSIONING_POM_NAME).toFile());
         assertThat(apiGitVersionedPomModel).satisfies(it -> assertSoftly(softly -> {
             softly.assertThat(it.getModelVersion()).isEqualTo(apiPomModel.getModelVersion());
             softly.assertThat(it.getGroupId()).isEqualTo(apiPomModel.getGroupId());
             softly.assertThat(it.getArtifactId()).isEqualTo(apiPomModel.getArtifactId());
-            softly.assertThat(it.getVersion()).isEqualTo(NO_COMMIT);
+            softly.assertThat(it.getVersion()).isEqualTo(expectedVersion);
             softly.assertThat(it.getProperties()).doesNotContainKeys(
                     "git.commit",
                     "git.ref"
             );
         }));
 
-        Model apiGitVersionedPomModelLogic = readModel(logicProjectDir.resolve("target/").resolve(GIT_VERSIONING_POM_NAME).toFile());
-        assertThat(apiGitVersionedPomModelLogic).satisfies(it -> assertSoftly(softly -> {
+        Model logicGitVersionedPomModel = readModel(logicProjectDir.resolve(GIT_VERSIONING_POM_NAME).toFile());
+        assertThat(logicGitVersionedPomModel).satisfies(it -> assertSoftly(softly -> {
             softly.assertThat(it.getModelVersion()).isEqualTo(logicPomModel.getModelVersion());
             softly.assertThat(it.getGroupId()).isEqualTo(logicPomModel.getGroupId());
             softly.assertThat(it.getArtifactId()).isEqualTo(logicPomModel.getArtifactId());
@@ -260,35 +507,104 @@ class GitVersioningExtensionIT {
     }
 
     @Test
+    void commitVersioning_multiModuleProject_ambiguous_artifactId() throws Exception {
+        // Given
+        Git.init().setInitialBranch("master").setDirectory(projectDir.toFile()).call();
+
+        pomModel.setPackaging("pom");
+        pomModel.addModule("logic");
+        pomModel.addModule("another-group-logic");
+
+        writeModel(projectDir.resolve("pom.xml").toFile(), pomModel);
+        writeExtensionsFile(projectDir);
+        writeExtensionConfigFile(projectDir, new Configuration());
+
+        Path logicProjectDir = Files.createDirectories(projectDir.resolve("logic"));
+        Model logicPomModel = writeModel(logicProjectDir.resolve("pom.xml").toFile(), new Model() {{
+            setModelVersion(pomModel.getModelVersion());
+            setParent(new Parent() {{
+                setGroupId(pomModel.getGroupId());
+                setArtifactId(pomModel.getArtifactId());
+                setVersion(pomModel.getVersion());
+            }});
+            setArtifactId("logic");
+        }});
+        Path anotherGroupLogicProjectDir = Files.createDirectories(projectDir.resolve("another-group-logic"));
+        Model anotherGroupLogicPomModel = writeModel(anotherGroupLogicProjectDir.resolve("pom.xml").toFile(), new Model() {{
+            setModelVersion(pomModel.getModelVersion());
+            setParent(new Parent() {{
+                setGroupId(pomModel.getGroupId());
+                setArtifactId(pomModel.getArtifactId());
+                setVersion(pomModel.getVersion());
+            }});
+            setGroupId("another.group");
+            setArtifactId("logic");
+        }});
+
+        // When
+        Verifier verifier = new Verifier(projectDir.toFile().getAbsolutePath());
+        verifier.executeGoal("verify");
+
+        // Then
+        String log = getLog(verifier);
+        assertThat(log).doesNotContain("[ERROR]", "[FATAL]");
+        String expectedVersion = "master-SNAPSHOT";
+        assertThat(log).contains("Building " + pomModel.getArtifactId() + " " + expectedVersion);
+        Model gitVersionedPomModel = readModel(projectDir.resolve(GIT_VERSIONING_POM_NAME).toFile());
+        assertThat(gitVersionedPomModel).satisfies(it -> assertSoftly(softly -> {
+            softly.assertThat(it.getModelVersion()).isEqualTo(pomModel.getModelVersion());
+            softly.assertThat(it.getGroupId()).isEqualTo(pomModel.getGroupId());
+            softly.assertThat(it.getArtifactId()).isEqualTo(pomModel.getArtifactId());
+            softly.assertThat(it.getVersion()).isEqualTo(expectedVersion);
+            softly.assertThat(it.getProperties()).doesNotContainKeys(
+                    "git.commit",
+                    "git.ref"
+            );
+        }));
+
+        Model apiGitVersionedPomModelLogic = readModel(logicProjectDir.resolve(GIT_VERSIONING_POM_NAME).toFile());
+        assertThat(apiGitVersionedPomModelLogic).satisfies(it -> assertSoftly(softly -> {
+            softly.assertThat(it.getModelVersion()).isEqualTo(logicPomModel.getModelVersion());
+            softly.assertThat(it.getGroupId()).isEqualTo(logicPomModel.getGroupId());
+            softly.assertThat(it.getArtifactId()).isEqualTo(logicPomModel.getArtifactId());
+            softly.assertThat(it.getVersion()).isEqualTo(null);
+            softly.assertThat(it.getProperties()).doesNotContainKeys(
+                    "git.commit",
+                    "git.ref"
+            );
+        }));
+
+        Model duplicateArtifactidGitVersionedPomModelLogic = readModel(anotherGroupLogicProjectDir.resolve(GIT_VERSIONING_POM_NAME).toFile());
+        assertThat(duplicateArtifactidGitVersionedPomModelLogic).satisfies(it -> assertSoftly(softly -> {
+            softly.assertThat(it.getModelVersion()).isEqualTo(anotherGroupLogicPomModel.getModelVersion());
+            softly.assertThat(it.getGroupId()).isEqualTo(anotherGroupLogicPomModel.getGroupId());
+            softly.assertThat(it.getArtifactId()).isEqualTo(anotherGroupLogicPomModel.getArtifactId());
+            softly.assertThat(it.getVersion()).isEqualTo(null);
+            softly.assertThat(it.getProperties()).doesNotContainKeys(
+                    "git.commit",
+                    "git.ref"
+            );
+        }));
+    }
+
+    @Test
     void branchVersioning_multiModuleProject_noParent() throws Exception {
         // Given
-
-        try (Git git = Git.init().setDirectory(projectDir.toFile()).call()) {
+        try (Git git = Git.init().setInitialBranch("master").setDirectory(projectDir.toFile()).call()) {
             RevCommit givenCommit = git.commit().setMessage("initial commit").setAllowEmpty(true).call();
             String givenBranch = "feature/test";
             git.branchCreate().setName(givenBranch).call();
             git.checkout().setName(givenBranch).call();
 
             pomModel.setPackaging("pom");
-            pomModel.addModule("api");
             pomModel.addModule("logic");
 
             writeModel(projectDir.resolve("pom.xml").toFile(), pomModel);
             writeExtensionsFile(projectDir);
 
-            VersionDescription branchVersionDescription = new VersionDescription();
-            branchVersionDescription.pattern = ".*";
-            branchVersionDescription.versionFormat = "${branch}-gitVersioning";
-            extensionConfig.branch.add(branchVersionDescription);
+            Configuration extensionConfig = new Configuration();
+            extensionConfig.branch.add(createBranchVersionDescription());
             writeExtensionConfigFile(projectDir, extensionConfig);
-
-            Path apiProjectDir = Files.createDirectories(projectDir.resolve("api"));
-            Model apiPomModel = writeModel(apiProjectDir.resolve("pom.xml").toFile(), new Model() {{
-                setModelVersion(pomModel.getModelVersion());
-                setGroupId(pomModel.getGroupId());
-                setVersion(pomModel.getVersion());
-                setArtifactId("api");
-            }});
 
             Path logicProjectDir = Files.createDirectories(projectDir.resolve("logic"));
             Model logicPomModel = writeModel(logicProjectDir.resolve("pom.xml").toFile(), new Model() {{
@@ -307,7 +623,7 @@ class GitVersioningExtensionIT {
             assertThat(log).doesNotContain("[ERROR]", "[FATAL]");
             String expectedVersion = givenBranch.replace("/", "-") + "-gitVersioning";
             //        assertThat(log).contains("Building " + logicPomModel.getArtifactId() + " " + expectedVersion);
-            Model gitVersionedLogicPomModel = readModel(logicProjectDir.resolve("target/").resolve(GIT_VERSIONING_POM_NAME).toFile());
+            Model gitVersionedLogicPomModel = readModel(logicProjectDir.resolve(GIT_VERSIONING_POM_NAME).toFile());
             assertThat(gitVersionedLogicPomModel).satisfies(it -> assertSoftly(softly -> {
                 softly.assertThat(it.getModelVersion()).isEqualTo(logicPomModel.getModelVersion());
                 softly.assertThat(it.getGroupId()).isEqualTo(logicPomModel.getGroupId());
@@ -324,8 +640,7 @@ class GitVersioningExtensionIT {
     @Test
     void branchVersioning_multiModuleProject_withExternalParent() throws Exception {
         // Given
-
-        try (Git git = Git.init().setDirectory(projectDir.toFile()).call()) {
+        try (Git git = Git.init().setInitialBranch("master").setDirectory(projectDir.toFile()).call()) {
             RevCommit givenCommit = git.commit().setMessage("initial commit").setAllowEmpty(true).call();
             String givenBranch = "feature/test";
             git.branchCreate().setName(givenBranch).call();
@@ -338,13 +653,11 @@ class GitVersioningExtensionIT {
             writeModel(projectDir.resolve("pom.xml").toFile(), pomModel);
             writeExtensionsFile(projectDir);
 
-            VersionDescription branchVersionDescription = new VersionDescription();
-            branchVersionDescription.pattern = ".*";
-            branchVersionDescription.versionFormat = "${branch}-gitVersioning";
-            extensionConfig.branch.add(branchVersionDescription);
+            Configuration extensionConfig = new Configuration();
+            extensionConfig.branch.add(createBranchVersionDescription());
             writeExtensionConfigFile(projectDir, extensionConfig);
 
-            Parent externalParent = new Parent(){{
+            Parent externalParent = new Parent() {{
                 setGroupId("org.springframework.boot");
                 setArtifactId("spring-boot-starter-parent");
                 setVersion("2.1.3.RELEASE");
@@ -376,7 +689,7 @@ class GitVersioningExtensionIT {
             assertThat(log).doesNotContain("[ERROR]", "[FATAL]");
             String expectedVersion = givenBranch.replace("/", "-") + "-gitVersioning";
             //        assertThat(log).contains("Building " + logicPomModel.getArtifactId() + " " + expectedVersion);
-            Model gitVersionedLogicPomModel = readModel(logicProjectDir.resolve("target/").resolve(GIT_VERSIONING_POM_NAME).toFile());
+            Model gitVersionedLogicPomModel = readModel(logicProjectDir.resolve(GIT_VERSIONING_POM_NAME).toFile());
             assertThat(gitVersionedLogicPomModel).satisfies(it -> assertSoftly(softly -> {
                 softly.assertThat(it.getModelVersion()).isEqualTo(logicPomModel.getModelVersion());
                 softly.assertThat(it.getGroupId()).isEqualTo(logicPomModel.getGroupId());
@@ -393,8 +706,7 @@ class GitVersioningExtensionIT {
     @Test
     void branchVersioning_multiModuleProject_withAggregationAndParent() throws Exception {
         // Given
-
-        try (Git git = Git.init().setDirectory(projectDir.toFile()).call()) {
+        try (Git git = Git.init().setInitialBranch("master").setDirectory(projectDir.toFile()).call()) {
             RevCommit givenCommit = git.commit().setMessage("initial commit").setAllowEmpty(true).call();
             String givenBranch = "feature/test";
             git.branchCreate().setName(givenBranch).call();
@@ -406,10 +718,8 @@ class GitVersioningExtensionIT {
             writeModel(projectDir.resolve("pom.xml").toFile(), pomModel);
             writeExtensionsFile(projectDir);
 
-            VersionDescription branchVersionDescription = new VersionDescription();
-            branchVersionDescription.pattern = ".*";
-            branchVersionDescription.versionFormat = "${branch}-gitVersioning";
-            extensionConfig.branch.add(branchVersionDescription);
+            Configuration extensionConfig = new Configuration();
+            extensionConfig.branch.add(createBranchVersionDescription());
             writeExtensionConfigFile(projectDir, extensionConfig);
 
             final Path parentProjectDir = Files.createDirectories(projectDir.resolve("parent"));
@@ -448,7 +758,7 @@ class GitVersioningExtensionIT {
             assertThat(getLog(verifier)).doesNotContain("[ERROR]", "[FATAL]");
             String expectedVersion = givenBranch.replace("/", "-") + "-gitVersioning";
             //        assertThat(log).contains("Building " + logicPomModel.getArtifactId() + " " + expectedVersion);
-            Model gitVersionedLogicPomModel = readModel(logicProjectDir.resolve("target/").resolve(GIT_VERSIONING_POM_NAME).toFile());
+            Model gitVersionedLogicPomModel = readModel(logicProjectDir.resolve(GIT_VERSIONING_POM_NAME).toFile());
             assertThat(gitVersionedLogicPomModel).satisfies(it -> assertSoftly(softly -> {
                 softly.assertThat(it.getModelVersion()).isEqualTo(logicPomModel.getModelVersion());
                 softly.assertThat(it.getGroupId()).isEqualTo(logicPomModel.getGroupId());
@@ -458,6 +768,72 @@ class GitVersioningExtensionIT {
                         "git.commit",
                         "git.ref"
                 );
+            }));
+        }
+    }
+
+    @Test
+    void dependencyUpdates_multiModuleProject() throws Exception {
+        // Given
+        try (Git git = Git.init().setInitialBranch("master").setDirectory(projectDir.toFile()).call()) {
+            RevCommit givenCommit = git.commit().setMessage("initial commit").setAllowEmpty(true).call();
+            String givenBranch = "test";
+            git.branchCreate().setName(givenBranch).call();
+            git.checkout().setName(givenBranch).call();
+
+            pomModel.setPackaging("pom");
+            pomModel.addModule("api");
+            pomModel.addModule("logic");
+
+            writeModel(projectDir.resolve("pom.xml").toFile(), pomModel);
+            writeExtensionsFile(projectDir);
+
+            Configuration extensionConfig = new Configuration();
+            extensionConfig.branch.add(createBranchVersionDescription());
+            writeExtensionConfigFile(projectDir, extensionConfig);
+
+            Path apiProjectDir = Files.createDirectories(projectDir.resolve("api"));
+            Model apiPomModel = writeModel(apiProjectDir.resolve("pom.xml").toFile(), new Model() {{
+                setModelVersion(pomModel.getModelVersion());
+                setParent(new Parent() {{
+                    setGroupId(pomModel.getGroupId());
+                    setArtifactId(pomModel.getArtifactId());
+                    setVersion(pomModel.getVersion());
+                }});
+                setArtifactId("api");
+            }});
+
+            Path logicProjectDir = Files.createDirectories(projectDir.resolve("logic"));
+            Model logicPomModel = writeModel(logicProjectDir.resolve("pom.xml").toFile(), new Model() {{
+                setModelVersion(pomModel.getModelVersion());
+                setParent(new Parent() {{
+                    setGroupId(pomModel.getGroupId());
+                    setArtifactId(pomModel.getArtifactId());
+                    setVersion(pomModel.getVersion());
+                }});
+                setArtifactId("logic");
+                addDependency(new Dependency() {{
+                    setGroupId(pomModel.getGroupId());
+                    setArtifactId("api");
+                    setVersion(pomModel.getVersion());
+                }});
+            }});
+
+            // When
+            Verifier verifier = new Verifier(projectDir.toFile().getAbsolutePath());
+            verifier.executeGoal("verify");
+
+            // Then
+            String log = getLog(verifier);
+            assertThat(log).doesNotContain("[ERROR]", "[FATAL]");
+            String expectedVersion = "test-gitVersioning";
+            assertThat(log).contains("Building " + logicPomModel.getArtifactId() + " " + expectedVersion);
+            Model gitVersionedLogicPomModel = readModel(logicProjectDir.resolve(GIT_VERSIONING_POM_NAME).toFile());
+            assertThat(gitVersionedLogicPomModel).satisfies(it -> assertSoftly(softly -> {
+                softly.assertThat(it.getDependencies().get(0)).satisfies(dependency -> {
+                    softly.assertThat(dependency.getArtifactId()).isEqualTo(apiPomModel.getArtifactId());
+                    softly.assertThat(dependency.getVersion()).isEqualTo(expectedVersion);
+                });
             }));
         }
     }
@@ -478,10 +854,27 @@ class GitVersioningExtensionIT {
                 "</extensions>").getBytes()).toFile();
     }
 
+    private VersionDescription createBranchVersionDescription() {
+        return createVersionDescription("${branch}-gitVersioning");
+    }
+
+    private VersionDescription createTagVersionDescription() {
+        return createVersionDescription("${tag}-gitVersioning");
+    }
+
+    private VersionDescription createVersionDescription(String format) {
+        VersionDescription branchVersionDescription = new VersionDescription();
+        branchVersionDescription.pattern = ".*";
+        branchVersionDescription.versionFormat = format;
+        return branchVersionDescription;
+    }
+
     private File writeExtensionConfigFile(Path projectDir, Configuration config) throws Exception {
         Path mvnDotDir = Files.createDirectories(projectDir.resolve(".mvn"));
         File configFile = mvnDotDir.resolve("maven-git-versioning-extension.xml").toFile();
-        new XmlMapper().writeValue(configFile, config);
+        new XmlMapper()
+                .enable(SerializationFeature.INDENT_OUTPUT)
+                .writeValue(configFile, config);
         return configFile;
     }
 

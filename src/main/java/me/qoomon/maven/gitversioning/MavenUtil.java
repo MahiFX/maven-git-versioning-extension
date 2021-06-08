@@ -1,11 +1,18 @@
 package me.qoomon.maven.gitversioning;
 
+import de.pdark.decentxml.Document;
+import de.pdark.decentxml.XMLParser;
+import de.pdark.decentxml.XMLStringSource;
+import org.apache.maven.model.BuildBase;
 import org.apache.maven.model.Model;
+import org.apache.maven.model.ModelBase;
+import org.apache.maven.model.Profile;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
 import org.apache.maven.model.io.xpp3.MavenXpp3Writer;
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 
 import java.io.*;
+import java.nio.file.Files;
 
 /**
  * Created by qoomon on 18/11/2016.
@@ -43,17 +50,34 @@ final class MavenUtil {
     }
 
     /**
-     * checks if <code>pomFile</code> is part of a project
+     * Builds pom file location from relative path
      *
-     * @param pomFile the pom file
-     * @return true if <code>pomFile</code> is part of a project
+     * @param workingDirectory current working directory
+     * @param relativePath     pom file path or directory of pom.xml
+     * @return pom.xml file
      */
-    static boolean isProjectPom(File pomFile) {
-        return pomFile != null
-                && pomFile.exists()
-                && pomFile.isFile()
-                // only project pom files ends in .xml, pom files from dependencies from repositories ends in .pom
-                && pomFile.getName().endsWith(".xml");
+    public static File pomFile(File workingDirectory, String relativePath) {
+        File modulePomFile = new File(workingDirectory, relativePath);
+        if (modulePomFile.isDirectory()) {
+            modulePomFile = new File(modulePomFile, "pom.xml");
+        }
+        return modulePomFile;
     }
 
+    public static void writeXml(final File file, final Document gitVersionedPom) throws IOException {
+        Files.write(file.toPath(), gitVersionedPom.toXML().getBytes());
+    }
+
+    public static Document readXml(File file) throws IOException {
+        String pomXml = new String(Files.readAllBytes(file.toPath()));
+        XMLParser parser = new XMLParser();
+        return parser.parse(new XMLStringSource(pomXml));
+    }
+
+    public static BuildBase getBuild(ModelBase model) {
+        if (model instanceof Profile) {
+            return ((Profile) model).getBuild();
+        }
+        return ((Model) model).getBuild();
+    }
 }
