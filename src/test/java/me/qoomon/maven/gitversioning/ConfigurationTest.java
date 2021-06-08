@@ -6,15 +6,15 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertAll;
 
 class ConfigurationTest {
 
     @Test
     void xmlUnmarshaller_empty() throws IOException {
         // given
-        String configXml =   "<gitVersioning>\n" +
-                "</gitVersioning>\n";
+        String configXml =   "<configuration>\n" +
+                "</configuration>\n";
 
         // when
         Configuration config = new XmlMapper()
@@ -22,6 +22,7 @@ class ConfigurationTest {
 
         // then
         assertAll(
+                () -> assertThat(config.preferTags).isNull(),
                 () -> assertThat(config.commit).isNull(),
                 () -> assertThat(config.branch).isEmpty(),
                 () -> assertThat(config.tag).isEmpty()
@@ -32,11 +33,11 @@ class ConfigurationTest {
     void xmlUnmarshaller_commitConfigOnly() throws IOException {
         // given
         String configXml = "" +
-                "<gitVersioning>\n" +
+                "<configuration>\n" +
                 "    <commit>\n" +
                 "        <versionFormat>commit1-format</versionFormat>\n" +
                 "    </commit>\n" +
-                "</gitVersioning>\n";
+                "</configuration>\n";
 
         // when
         Configuration config = new XmlMapper()
@@ -55,7 +56,7 @@ class ConfigurationTest {
     void xmlUnmarshaller_branchConfigsOnly() throws IOException {
         // given
         String configXml = "" +
-                "<gitVersioning>\n" +
+                "<configuration>\n" +
                 "    <branch>\n" +
                 "        <pattern>branch1-pattern</pattern>\n" +
                 "        <versionFormat>branch1-format</versionFormat>\n" +
@@ -64,7 +65,7 @@ class ConfigurationTest {
                 "        <pattern>branch2-pattern</pattern>\n" +
                 "        <versionFormat>branch2-format</versionFormat>\n" +
                 "    </branch>\n" +
-                "</gitVersioning>\n";
+                "</configuration>\n";
 
         // when
         Configuration config = new XmlMapper()
@@ -90,10 +91,74 @@ class ConfigurationTest {
     }
 
     @Test
+    void xmlUnmarshaller_branchConfigsOnlyWithProperties() throws IOException {
+        // given
+        String configXml = "" +
+                "<configuration>\n" +
+                "    <branch>\n" +
+                "        <pattern>branch1-pattern</pattern>\n" +
+                "        <versionFormat>branch1-format</versionFormat>\n" +
+                "        <property>\n" +
+                "            <name>my.property</name>\n" +
+                "            <valueFormat>my.property.format</valueFormat>\n" +
+                "        </property>\n" +
+                "    </branch>\n" +
+                "    <branch>\n" +
+                "        <pattern>branch2-pattern</pattern>\n" +
+                "        <versionFormat>branch2-format</versionFormat>\n" +
+                "        <property>\n" +
+                "            <name>my.first.property</name>\n" +
+                "            <valueFormat>my.first.property.format</valueFormat>\n" +
+                "        </property>\n" +
+                "        <property>\n" +
+                "            <name>my.second.property</name>\n" +
+                "            <valueFormat>my.second.property.format</valueFormat>\n" +
+                "        </property>\n" +
+                "    </branch>\n" +
+                "</configuration>\n";
+
+        // when
+        Configuration config = new XmlMapper()
+                .readValue(configXml, Configuration.class);
+
+        // then
+        assertAll(
+                () -> assertThat(config.commit).isNull(),
+                () -> assertThat(config.branch)
+                        .satisfies(branchConfigs -> assertAll(
+                                () -> assertThat(branchConfigs).hasSize(2),
+                                () -> assertThat(branchConfigs.get(0)).satisfies(branchConfig -> assertAll(
+                                        () -> assertThat(branchConfig.pattern).isEqualTo("branch1-pattern"),
+                                        () -> assertThat(branchConfig.versionFormat).isEqualTo("branch1-format"),
+                                        () -> assertThat(branchConfig.property).hasSize(1),
+                                        () -> assertThat(branchConfig.property.get(0)).satisfies(branchPropertyConfig -> assertAll(
+                                                () -> assertThat(branchPropertyConfig.name).isEqualTo("my.property"),
+                                                () -> assertThat(branchPropertyConfig.valueFormat).isEqualTo("my.property.format")
+                                        ))
+                                )),
+                                () -> assertThat(branchConfigs.get(1)).satisfies(branchConfig -> assertAll(
+                                        () -> assertThat(branchConfig.pattern).isEqualTo("branch2-pattern"),
+                                        () -> assertThat(branchConfig.versionFormat).isEqualTo("branch2-format"),
+                                        () -> assertThat(branchConfig.property).hasSize(2),
+                                        () -> assertThat(branchConfig.property.get(0)).satisfies(branchPropertyConfig -> assertAll(
+                                                () -> assertThat(branchPropertyConfig.name).isEqualTo("my.first.property"),
+                                                () -> assertThat(branchPropertyConfig.valueFormat).isEqualTo("my.first.property.format")
+                                        )),
+                                        () -> assertThat(branchConfig.property.get(1)).satisfies(branchPropertyConfig -> assertAll(
+                                                () -> assertThat(branchPropertyConfig.name).isEqualTo("my.second.property"),
+                                                () -> assertThat(branchPropertyConfig.valueFormat).isEqualTo("my.second.property.format")
+                                        ))
+                                ))
+                        )),
+                () -> assertThat(config.tag).isEmpty()
+        );
+    }
+
+    @Test
     void xmlUnmarshaller_tagsConfigsOnly() throws IOException {
         // given
         String configXml = "" +
-                "<gitVersioning>\n" +
+                "<configuration>\n" +
                 "    <tag>\n" +
                 "        <pattern>tag1-pattern</pattern>\n" +
                 "        <versionFormat>tag1-format</versionFormat>\n" +
@@ -102,7 +167,7 @@ class ConfigurationTest {
                 "        <pattern>tag2-pattern</pattern>\n" +
                 "        <versionFormat>tag2-format</versionFormat>\n" +
                 "    </tag>\n" +
-                "</gitVersioning>\n";
+                "</configuration>\n";
 
         // when
         Configuration config = new XmlMapper()
@@ -131,7 +196,8 @@ class ConfigurationTest {
     void xmlUnmarshaller() throws IOException {
         // given
         String configXml = "" +
-                "<gitVersioning>\n" +
+                "<configuration>\n" +
+                "    <preferTags>true</preferTags>\n" +
                 "    <commit>\n" +
                 "        <versionFormat>commit1-format</versionFormat>\n" +
                 "    </commit>\n" +
@@ -151,7 +217,7 @@ class ConfigurationTest {
                 "        <pattern>tag2-pattern</pattern>\n" +
                 "        <versionFormat>tag2-format</versionFormat>\n" +
                 "    </tag>\n" +
-                "</gitVersioning>\n";
+                "</configuration>\n";
 
         // when
         Configuration config = new XmlMapper()
@@ -159,6 +225,7 @@ class ConfigurationTest {
 
         // then
         assertAll(
+                () -> assertThat(config.preferTags).isTrue(),
                 () -> assertThat(config.commit)
                         .satisfies(commitConfig -> assertThat(commitConfig.versionFormat).isEqualTo("commit1-format")),
                 () -> assertThat(config.branch)
