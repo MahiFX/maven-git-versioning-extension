@@ -9,6 +9,7 @@ import me.qoomon.gitversioning.commons.GitSituation;
 import me.qoomon.gitversioning.commons.GitUtil;
 import me.qoomon.maven.gitversioning.Configuration.PropertyDescription;
 import me.qoomon.maven.gitversioning.Configuration.VersionDescription;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.maven.artifact.versioning.DefaultArtifactVersion;
 import org.apache.maven.building.Source;
 import org.apache.maven.execution.MavenSession;
@@ -92,6 +93,7 @@ public class GitVersioningModelProcessor extends DefaultModelProcessor {
     private Map<String, String> gitProjectProperties;
     private Set<GAV> relatedProjects;
 
+    private Set<String> forceGroupIds = new HashSet<>();
 
     // ---- other fields -----------------------------------------------------------------------------------------------
 
@@ -140,6 +142,11 @@ public class GitVersioningModelProcessor extends DefaultModelProcessor {
         File configFile = new File(mvnDirectory, projectArtifactId() + ".xml");
         logger.debug("read config from " + configFile);
         Configuration config = readConfig(configFile);
+
+        if (StringUtils.isNotEmpty(config.forceGroupIds)) {
+            this.forceGroupIds.addAll(Arrays.asList(config.forceGroupIds.split("\\s*,\\s*")));
+        }
+
 
         // check if extension is disabled by command option
         String commandOptionDisable = getCommandOption(OPTION_NAME_DISABLE);
@@ -747,6 +754,9 @@ public class GitVersioningModelProcessor extends DefaultModelProcessor {
         // check for related parent project by parent tag
         if (projectModel.getParent() != null) {
             GAV parentGAV = GAV.of(projectModel.getParent());
+            if(forceGroupIds.contains(parentGAV.getGroupId())){
+                relatedProjects.add(parentGAV);
+            }
             File parentProjectPomFile = getParentProjectPomFile(projectModel);
             if (isRelatedPom(parentProjectPomFile)) {
                 Model parentProjectModel = readModel(parentProjectPomFile);
