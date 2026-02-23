@@ -97,12 +97,13 @@ public final class GitUtil {
             return null;
         }
         try (Repository repository = repositoryBuilder.build()) {
+            Repository commonRepo = worktreesFix_getCommonRepository(repository);
             File rootDirectory = worktreesFix_getWorkTree(repository);
             ObjectId headObjectId = worktreesFix_resolveHead(repository);
             String headCommit = headObjectId != null ? headObjectId.getName() : NO_COMMIT;
-            long headCommitTimestamp = headObjectId != null ? repository.parseCommit(headObjectId).getCommitTime() : 0;
+            long headCommitTimestamp = headObjectId != null ? commonRepo.parseCommit(headObjectId).getCommitTime() : 0;
             String headBranch = GitUtil.branch(repository);
-            List<String> headTags = GitUtil.tag_pointsAt(repository, HEAD);
+            List<String> headTags = GitUtil.tag_pointsAt(commonRepo, HEAD);
             boolean isClean = GitUtil.status(repository).isClean();
             return new GitSituation(rootDirectory, headCommit, headCommitTimestamp, headBranch, headTags, isClean);
         }
@@ -126,6 +127,29 @@ public final class GitUtil {
                 return new File(gitDirPath).getParentFile();
             }
             throw e;
+        }
+    }
+
+    /**
+     * Get the common repository for a worktree. In a linked worktree, the object database
+     * and refs live in the common git directory, not the worktree-specific one.
+     * For normal repositories, returns the same repository.
+     *
+     * @return the common repository (may be a new instance for worktrees)
+     */
+    public static Repository worktreesFix_getCommonRepository(Repository repository) throws IOException {
+        try {
+            repository.getWorkTree();
+            return repository;
+        } catch (NoWorkTreeException e) {
+            File commonDirFile = new File(repository.getDirectory(), "commondir");
+            if (!commonDirFile.exists()) {
+                throw e;
+            }
+
+            String commonDirPath = Files.readAllLines(commonDirFile.toPath()).get(0);
+            File commonGitDir = new File(repository.getDirectory(), commonDirPath);
+            return new FileRepositoryBuilder().setGitDir(commonGitDir).build();
         }
     }
 
