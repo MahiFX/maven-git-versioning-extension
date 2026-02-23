@@ -3,6 +3,7 @@ package me.qoomon.gitversioning.commons;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.Status;
 import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.errors.NoWorkTreeException;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
@@ -10,6 +11,7 @@ import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -25,6 +27,26 @@ public final class GitUtil {
             return Git.wrap(repository).status().call();
         } catch (GitAPIException e) {
             throw new RuntimeException(e);
+        } catch (NoWorkTreeException e) {
+            // In a worktree, JGit may not recognise the work tree.
+            // Re-open the repository via the common dir with the worktree path set explicitly.
+            try {
+                File workTree = worktreesFix_getWorkTree(repository);
+                File commonDirFile = new File(repository.getDirectory(), "commondir");
+                if (commonDirFile.exists()) {
+                    String commonDirPath = Files.readAllLines(commonDirFile.toPath()).get(0);
+                    File commonGitDir = new File(repository.getDirectory(), commonDirPath);
+                    try (Repository worktreeRepo = new FileRepositoryBuilder()
+                            .setGitDir(commonGitDir)
+                            .setWorkTree(workTree)
+                            .build()) {
+                        return Git.wrap(worktreeRepo).status().call();
+                    }
+                }
+                throw new RuntimeException(e);
+            } catch (IOException | GitAPIException ex) {
+                throw new RuntimeException(ex);
+            }
         }
     }
 
@@ -75,12 +97,67 @@ public final class GitUtil {
             return null;
         }
         try (Repository repository = repositoryBuilder.build()) {
-            String headCommit = GitUtil.revParse(repository, HEAD);
-            long headCommitTimestamp = GitUtil.revTimestamp(repository, HEAD);
+            File rootDirectory = worktreesFix_getWorkTree(repository);
+            ObjectId headObjectId = worktreesFix_resolveHead(repository);
+            String headCommit = headObjectId != null ? headObjectId.getName() : NO_COMMIT;
+            long headCommitTimestamp = headObjectId != null ? repository.parseCommit(headObjectId).getCommitTime() : 0;
             String headBranch = GitUtil.branch(repository);
             List<String> headTags = GitUtil.tag_pointsAt(repository, HEAD);
             boolean isClean = GitUtil.status(repository).isClean();
-            return new GitSituation(repositoryBuilder.getGitDir(), headCommit, headCommitTimestamp, headBranch, headTags, isClean);
+            return new GitSituation(rootDirectory, headCommit, headCommitTimestamp, headBranch, headTags, isClean);
+        }
+    }
+
+    /**
+     * Resolve the work tree directory, handling git worktrees where
+     * {@link Repository#getWorkTree()} throws {@link NoWorkTreeException}.
+     *
+     * @see Repository#getWorkTree()
+     */
+    public static File worktreesFix_getWorkTree(Repository repository) throws IOException {
+        try {
+            return repository.getWorkTree();
+        } catch (NoWorkTreeException e) {
+            // In a worktree, the git directory (e.g. .git/worktrees/MahiMain3) contains
+            // a "gitdir" file pointing back to the worktree's .git file
+            File gitDirFile = new File(repository.getDirectory(), "gitdir");
+            if (gitDirFile.exists()) {
+                String gitDirPath = Files.readAllLines(gitDirFile.toPath()).get(0);
+                return new File(gitDirPath).getParentFile();
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * Resolve HEAD in a worktree-safe way. In a linked worktree, JGit may fail
+     * to resolve HEAD because it doesn't recognise the worktree git directory.
+     * This method falls back to manually parsing the HEAD file.
+     *
+     * @see Repository#resolve(String)
+     */
+    public static ObjectId worktreesFix_resolveHead(Repository repository) throws IOException {
+        try {
+            repository.getWorkTree();
+            return repository.resolve(HEAD);
+        } catch (NoWorkTreeException e) {
+            File headFile = new File(repository.getDirectory(), "HEAD");
+            if (!headFile.exists()) {
+                throw e;
+            }
+
+            String head = Files.readAllLines(headFile.toPath()).get(0);
+            if (head.startsWith("ref:")) {
+                String refPath = head.replaceFirst("^ref: *", "");
+
+                File commonDirFile = new File(repository.getDirectory(), "commondir");
+                String commonDirPath = Files.readAllLines(commonDirFile.toPath()).get(0);
+                File commonGitDir = new File(repository.getDirectory(), commonDirPath);
+
+                File refFile = new File(commonGitDir, refPath);
+                head = Files.readAllLines(refFile.toPath()).get(0);
+            }
+            return repository.resolve(head);
         }
     }
 }
