@@ -62,6 +62,8 @@ public final class GitUtil {
     /**
      * Get the upstream (tracking) branch name for the current branch, stripped of the remote prefix.
      * For example, if the current branch tracks "origin/release/25.4", this returns "release/25.4".
+     * Uses the common repository config to support linked worktrees where branch tracking config
+     * lives in the main .git/config rather than the worktree-specific git directory.
      *
      * @return the upstream branch name without remote prefix, or null if no upstream is configured
      */
@@ -70,7 +72,10 @@ public final class GitUtil {
         if (branch == null) {
             return null;
         }
-        BranchConfig branchConfig = new BranchConfig(repository.getConfig(), branch);
+        // In a linked worktree, branch tracking config is in the main .git/config,
+        // not the worktree's git dir. Use the common repository to read config.
+        Repository configRepo = worktreesFix_getCommonRepository(repository);
+        BranchConfig branchConfig = new BranchConfig(configRepo.getConfig(), branch);
         String trackingBranch = branchConfig.getTrackingBranch();
         if (trackingBranch == null) {
             return null;
