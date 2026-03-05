@@ -177,6 +177,7 @@ public class GitVersioningModelProcessor extends DefaultModelProcessor {
         logger.debug("  head commit: " + gitSituation.getHeadCommit());
         logger.debug("  head commit timestamp: " + gitSituation.getHeadCommitTimestamp());
         logger.debug("  head branch: " + gitSituation.getHeadBranch());
+        logger.debug("  upstream branch: " + gitSituation.getUpstreamBranch());
         logger.debug("  head tags: " + gitSituation.getHeadTags());
 
         // determine git version details
@@ -539,6 +540,16 @@ public class GitVersioningModelProcessor extends DefaultModelProcessor {
             for (VersionDescription branchConfig : config.branch) {
                 if (branchConfig.pattern == null || headBranch.matches(branchConfig.pattern)) {
                     return new GitVersionDetails(headCommit, BRANCH, headBranch, branchConfig);
+                }
+            }
+
+            // fallback to upstream tracking branch if local branch didn't match any pattern
+            String upstreamBranch = gitSituation.getUpstreamBranch();
+            if (upstreamBranch != null) {
+                for (VersionDescription branchConfig : config.branch) {
+                    if (branchConfig.pattern == null || upstreamBranch.matches(branchConfig.pattern)) {
+                        return new GitVersionDetails(headCommit, BRANCH, upstreamBranch, branchConfig);
+                    }
                 }
             }
 

@@ -4,6 +4,7 @@ import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.Status;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.errors.NoWorkTreeException;
+import org.eclipse.jgit.lib.BranchConfig;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
@@ -58,6 +59,32 @@ public final class GitUtil {
         return branch;
     }
 
+    /**
+     * Get the upstream (tracking) branch name for the current branch, stripped of the remote prefix.
+     * For example, if the current branch tracks "origin/release/25.4", this returns "release/25.4".
+     *
+     * @return the upstream branch name without remote prefix, or null if no upstream is configured
+     */
+    public static String upstreamBranch(Repository repository) throws IOException {
+        String branch = branch(repository);
+        if (branch == null) {
+            return null;
+        }
+        BranchConfig branchConfig = new BranchConfig(repository.getConfig(), branch);
+        String trackingBranch = branchConfig.getTrackingBranch();
+        if (trackingBranch == null) {
+            return null;
+        }
+        // trackingBranch is fully qualified like "refs/remotes/origin/release/25.4"
+        // Strip refs/remotes/<remote>/ prefix to get the branch name
+        String remote = branchConfig.getRemote();
+        String prefix = "refs/remotes/" + remote + "/";
+        if (trackingBranch.startsWith(prefix)) {
+            return trackingBranch.substring(prefix.length());
+        }
+        return null;
+    }
+
     public static List<String> tag_pointsAt(Repository repository, String revstr) throws IOException {
         ObjectId revObjectId = repository.resolve(revstr);
         List<String> tagNames = new ArrayList<>();
@@ -103,9 +130,10 @@ public final class GitUtil {
             String headCommit = headObjectId != null ? headObjectId.getName() : NO_COMMIT;
             long headCommitTimestamp = headObjectId != null ? commonRepo.parseCommit(headObjectId).getCommitTime() : 0;
             String headBranch = GitUtil.branch(repository);
+            String upstreamBranch = GitUtil.upstreamBranch(repository);
             List<String> headTags = GitUtil.tag_pointsAt(commonRepo, HEAD);
             boolean isClean = GitUtil.status(repository).isClean();
-            return new GitSituation(rootDirectory, headCommit, headCommitTimestamp, headBranch, headTags, isClean);
+            return new GitSituation(rootDirectory, headCommit, headCommitTimestamp, headBranch, upstreamBranch, headTags, isClean);
         }
     }
 

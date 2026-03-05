@@ -18,14 +18,20 @@ public class GitSituation {
     private final String headCommit;
     private final long headCommitTimestamp;
     private final String headBranch;
+    private final String upstreamBranch;
     private final List<String> headTags;
     private final boolean clean;
 
     public GitSituation(File rootDirectory, String headCommit, long headCommitTimestamp, String headBranch, List<String> headTags, boolean clean) {
+        this(rootDirectory, headCommit, headCommitTimestamp, headBranch, null, headTags, clean);
+    }
+
+    public GitSituation(File rootDirectory, String headCommit, long headCommitTimestamp, String headBranch, String upstreamBranch, List<String> headTags, boolean clean) {
         this.rootDirectory = requireNonNull(rootDirectory);
         this.headCommit = requireNonNull(headCommit);
         this.headCommitTimestamp = headCommitTimestamp;
         this.headBranch = headBranch;
+        this.upstreamBranch = upstreamBranch;
         this.headTags = requireNonNull(headTags);
         this.clean = clean;
     }
@@ -51,6 +57,10 @@ public class GitSituation {
         return headBranch;
     }
 
+    public String getUpstreamBranch() {
+        return upstreamBranch;
+    }
+
     public List<String> getHeadTags() {
         return headTags;
     }
@@ -68,6 +78,7 @@ public class GitSituation {
         private String headCommit = NO_COMMIT;
         private long headCommitTimestamp = 0;
         private String headBranch = null;
+        private String upstreamBranch = null;
         private List<String> headTags = emptyList();
         private boolean clean = true;
 
@@ -92,6 +103,11 @@ public class GitSituation {
             return this;
         }
 
+        public Builder setUpstreamBranch(String upstreamBranch) {
+            this.upstreamBranch = upstreamBranch;
+            return this;
+        }
+
         public Builder setHeadTags(List<String> headTags) {
             this.headTags = headTags;
             return this;
@@ -103,7 +119,7 @@ public class GitSituation {
         }
 
         public GitSituation build() {
-            return new GitSituation(rootDirectory, headCommit, headCommitTimestamp, headBranch, headTags, clean);
+            return new GitSituation(rootDirectory, headCommit, headCommitTimestamp, headBranch, upstreamBranch, headTags, clean);
         }
 
         public static Builder of(GitSituation gitSituation) {
@@ -113,6 +129,7 @@ public class GitSituation {
                     .setHeadCommit(gitSituation.headCommit)
                     .setHeadCommitTimestamp(gitSituation.headCommitTimestamp)
                     .setHeadBranch(gitSituation.headBranch)
+                    .setUpstreamBranch(gitSituation.upstreamBranch)
                     .setHeadTags(gitSituation.headTags);
         }
     }
