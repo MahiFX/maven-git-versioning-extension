@@ -408,4 +408,62 @@ class GitUtilTest {
         List<String> expectedTags = Arrays.asList(givenTag2, givenTag1, givenTag3);
         assertThat(gitSituation.getHeadTags()).isEqualTo(expectedTags);
     }
+
+    @Test
+    void situation_linkedWorktree_looseRef() throws Exception {
+
+        // Given
+        Path mainDir = java.nio.file.Files.createDirectories(tempDir.resolve("main"));
+        Git git = Git.init().setInitialBranch("master").setDirectory(mainDir.toFile()).call();
+        RevCommit givenCommit = git.commit().setMessage("init").setAllowEmpty(true).call();
+
+        Path worktreeDir = tempDir.resolve("wt");
+        runGit(mainDir, "worktree", "add", worktreeDir.toString(), "-b", "release/1.0", "master");
+
+        // When
+        GitSituation gitSituation = GitUtil.situation(worktreeDir.toFile());
+
+        // Then
+        assertThat(gitSituation).satisfies(it -> assertSoftly(softly -> {
+            softly.assertThat(it.getHeadCommit()).isEqualTo(givenCommit.getName());
+            softly.assertThat(it.getHeadBranch()).isEqualTo("release/1.0");
+        }));
+    }
+
+    @Test
+    void situation_linkedWorktree_packedRef() throws Exception {
+
+        // Given
+        Path mainDir = java.nio.file.Files.createDirectories(tempDir.resolve("main"));
+        Git git = Git.init().setInitialBranch("master").setDirectory(mainDir.toFile()).call();
+        RevCommit givenCommit = git.commit().setMessage("init").setAllowEmpty(true).call();
+
+        Path worktreeDir = tempDir.resolve("wt");
+        runGit(mainDir, "worktree", "add", worktreeDir.toString(), "-b", "release/1.0", "master");
+        runGit(mainDir, "pack-refs", "--all");
+        assertThat(mainDir.resolve(".git/refs/heads/release/1.0")).doesNotExist();
+
+        // When
+        GitSituation gitSituation = GitUtil.situation(worktreeDir.toFile());
+
+        // Then
+        assertThat(gitSituation).satisfies(it -> assertSoftly(softly -> {
+            softly.assertThat(it.getHeadCommit()).isEqualTo(givenCommit.getName());
+            softly.assertThat(it.getHeadBranch()).isEqualTo("release/1.0");
+        }));
+    }
+
+    private static void runGit(Path repoDir, String... args) throws Exception {
+        List<String> command = new java.util.ArrayList<>(Arrays.asList("git"));
+        command.addAll(Arrays.asList(args));
+        Process process = new ProcessBuilder(command)
+                .directory(repoDir.toFile())
+                .redirectErrorStream(true)
+                .start();
+        java.util.Scanner scanner = new java.util.Scanner(process.getInputStream()).useDelimiter("\\A");
+        String output = scanner.hasNext() ? scanner.next() : "";
+        if (process.waitFor() != 0) {
+            throw new IllegalStateException("git " + Arrays.toString(args) + " failed: " + output);
+        }
+    }
 }

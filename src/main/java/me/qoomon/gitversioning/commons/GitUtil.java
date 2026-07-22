@@ -205,14 +205,10 @@ public final class GitUtil {
 
             String head = Files.readAllLines(headFile.toPath()).get(0);
             if (head.startsWith("ref:")) {
+                // Resolve the ref through the common repository's ref database,
+                // which handles both loose and packed refs
                 String refPath = head.replaceFirst("^ref: *", "");
-
-                File commonDirFile = new File(repository.getDirectory(), "commondir");
-                String commonDirPath = Files.readAllLines(commonDirFile.toPath()).get(0);
-                File commonGitDir = new File(repository.getDirectory(), commonDirPath);
-
-                File refFile = new File(commonGitDir, refPath);
-                head = Files.readAllLines(refFile.toPath()).get(0);
+                return worktreesFix_getCommonRepository(repository).resolve(refPath);
             }
             return repository.resolve(head);
         }
