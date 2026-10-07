@@ -45,9 +45,8 @@ import static me.qoomon.maven.gitversioning.BuildProperties.projectArtifactId;
 import static me.qoomon.maven.gitversioning.GitVersioningMojo.GOAL;
 import static me.qoomon.maven.gitversioning.GitVersioningMojo.asPlugin;
 import static me.qoomon.maven.gitversioning.MavenUtil.*;
-import static org.apache.maven.shared.utils.StringUtils.leftPad;
-import static org.apache.maven.shared.utils.StringUtils.repeat;
-import static org.apache.maven.shared.utils.logging.MessageUtils.buffer;
+import static org.apache.commons.lang3.StringUtils.leftPad;
+import static org.apache.commons.lang3.StringUtils.repeat;
 import static org.slf4j.LoggerFactory.getLogger;
 
 // TODO add option to throw an error if git has non clean state
@@ -172,7 +171,7 @@ public class GitVersioningModelProcessor extends DefaultModelProcessor {
             disabled = true;
             return;
         }
-        logger.debug(buffer().strong("git situation:").toString());
+        logger.debug("git situation:");
         logger.debug("  root directory: " + gitSituation.getRootDirectory());
         logger.debug("  head commit: " + gitSituation.getHeadCommit());
         logger.debug("  head commit timestamp: " + gitSituation.getHeadCommitTimestamp());
@@ -182,19 +181,19 @@ public class GitVersioningModelProcessor extends DefaultModelProcessor {
 
         // determine git version details
         boolean preferTagsOption = getPreferTagsOption(config);
-        logger.debug(buffer().strong("option:").toString() + " prefer tags: " + preferTagsOption);
+        logger.debug("option:" + " prefer tags: " + preferTagsOption);
         gitVersionDetails = getGitVersionDetails(gitSituation, config, preferTagsOption);
-        logger.info("git ref: " + buffer().strong(gitVersionDetails.getRefName())
+        logger.info("git ref: " + gitVersionDetails.getRefName()
                 + " (" + gitVersionDetails.getRefType().name().toLowerCase() + ")");
         gitVersioningPropertyDescriptionMap = gitVersionDetails.getConfig().property.stream()
                 .collect(toMap(property -> property.name, property -> property));
 
         updatePomOption = getUpdatePomOption(config, gitVersionDetails.getConfig());
-        logger.debug(buffer().strong("option:").toString() + " update pom: " + updatePomOption);
+        logger.debug("option:" + " update pom: " + updatePomOption);
 
         // determine related projects
         relatedProjects = determineRelatedProjects(projectModel);
-        logger.debug(buffer().strong("related projects:").toString());
+        logger.debug("related projects:");
         relatedProjects.forEach(gav -> logger.debug("  " + gav));
 
         // add session root project as initial module
@@ -366,7 +365,7 @@ public class GitVersioningModelProcessor extends DefaultModelProcessor {
         if (pluginManagement != null) {
             List<Plugin> relatedPlugins = filterRelatedPlugins(pluginManagement.getPlugins());
             if (!relatedPlugins.isEmpty()) {
-                logger.debug(buffer().strong("plugin management:").toString());
+                logger.debug("plugin management:");
                 for (Plugin plugin : relatedPlugins) {
                     updateVersion(plugin);
                 }
@@ -378,7 +377,7 @@ public class GitVersioningModelProcessor extends DefaultModelProcessor {
         if (reporting != null) {
             List<ReportPlugin> relatedPlugins = filterRelatedReportPlugins(reporting.getPlugins());
             if (!relatedPlugins.isEmpty()) {
-                logger.debug(buffer().strong("reporting plugins:").toString());
+                logger.debug("reporting plugins:");
                 for (ReportPlugin plugin : relatedPlugins) {
                     updateVersion(plugin);
                 }
@@ -432,7 +431,7 @@ public class GitVersioningModelProcessor extends DefaultModelProcessor {
         if (dependencyManagement != null) {
             List<Dependency> relatedDependencies = filterRelatedDependencies(dependencyManagement.getDependencies());
             if (!relatedDependencies.isEmpty()) {
-                logger.debug(buffer().strong("dependency management:").toString());
+                logger.debug("dependency management:");
                 for (Dependency dependency : relatedDependencies) {
                     updateVersion(dependency);
                 }
@@ -1048,9 +1047,7 @@ public class GitVersioningModelProcessor extends DefaultModelProcessor {
         String metaInfo = "[core extension]";
 
         String plainLog = extension + " " + metaInfo;
-        String formattedLog = buffer()
-                .a(" ").mojo(extension).a(" ").strong(metaInfo).a(" ")
-                .toString();
+        String formattedLog = " " + extension + " " + metaInfo + " ";
 
         return padLogHeaderPadding(plainLog, formattedLog);
     }
@@ -1060,22 +1057,17 @@ public class GitVersioningModelProcessor extends DefaultModelProcessor {
         int padding = max(6, 72 - 2 - plainLog.length());
         int paddingLeft = (int) floor(padding / 2.0);
         int paddingRight = (int) ceil(padding / 2.0);
-        return buffer()
-                .strong(repeat(pad, paddingLeft))
-                .a(formattedLog)
-                .strong(repeat(pad, paddingRight))
-                .toString();
+        return repeat(pad, paddingLeft) + formattedLog + repeat(pad, paddingRight);
     }
 
     private static String projectLogHeader(GAV projectGAV) {
-        String project = projectGAV.getProjectId();
-        return buffer().project(project).toString();
+        return projectGAV.getProjectId();
     }
 
     private static String sectionLogHeader(String title, ModelBase model) {
         String header = title + ":";
         if (model instanceof Profile) {
-            header = buffer().strong("profile " + ((Profile) model).getId() + " ") + header;
+            header = "profile " + ((Profile) model).getId() + " " + header;
         }
         return header;
     }
